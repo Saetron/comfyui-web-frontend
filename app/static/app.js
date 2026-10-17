@@ -1577,6 +1577,15 @@ const loadReelPromptIntoGenerator = loadTikTokPromptIntoGenerator;
 // INTERNAL DELETE CONFIRMATION MODAL
 // ==========================================
 function openDeleteConfirmModal(imageObj) {
+    if (!imageObj) {
+        const imgModal = document.getElementById('image-modal');
+        const tiktokModal = document.getElementById('tiktok-modal');
+        if (imgModal && !imgModal.classList.contains('hidden')) {
+            imageObj = state.currentModalImage || (state.galleryImages && state.galleryImages[state.currentModalIndex]);
+        } else if (tiktokModal && !tiktokModal.classList.contains('hidden')) {
+            imageObj = state.currentTikTokImage || (state.tiktokQueue && state.tiktokQueue[state.tiktokIndex]);
+        }
+    }
     if (!imageObj) return;
     state.imagePendingDelete = imageObj;
 

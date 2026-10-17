@@ -151,6 +151,23 @@ body::before {
     box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.9), 0 0 45px rgba(255, 94, 152, 0.3);
 }
 
+/* Stacking Layer Hierarchy for Modals and Popouts */
+#image-modal {
+    z-index: 1000 !important;
+}
+
+#tiktok-modal {
+    z-index: 1000 !important;
+}
+
+#delete-confirm-modal {
+    z-index: 2000 !important;
+}
+
+#toast-container {
+    z-index: 3000 !important;
+}
+
 .glass-reel-card {
     background: rgba(14, 15, 30, 0.88);
     backdrop-filter: blur(24px);
