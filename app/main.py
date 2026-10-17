@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -265,6 +265,27 @@ async def save_comfy_workflow(req: WorkflowSaveRequest):
     if not success:
         raise HTTPException(status_code=500, detail="Failed to save workflow to destination")
     return {"status": "saved", "filename": req.filename, "destination": req.destination}
+
+
+@app.post("/api/comfy/workflows/upload")
+async def upload_workflow(file: UploadFile = File(...)):
+    """Upload and activate a workflow from a .json file or a ComfyUI-generated .png file."""
+    try:
+        content_bytes = await file.read()
+        res = comfy_service.import_workflow_file(file.filename or "uploaded_workflow.json", content_bytes)
+        # Fetch updated workflow list
+        all_workflows = await comfy_service.list_available_workflows()
+        return {
+            "status": "success",
+            "message": f"Workflow '{res['name']}' imported successfully!",
+            "imported": res,
+            "workflows": all_workflows,
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error uploading workflow: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to import workflow: {e}")
 
 
 async def _run_generation_tracker(client_id: str, prompt_id: str, resolved_params: Dict[str, Any]):

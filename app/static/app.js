@@ -69,23 +69,32 @@ function getOrCreateClientId() {
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
+    if (!container) return;
     const toast = document.createElement('div');
-    const bgClass = type === 'error' ? 'bg-rose-950/90 border-rose-800 text-rose-200' :
-                    type === 'success' ? 'bg-emerald-950/90 border-emerald-800 text-emerald-200' :
-                    'bg-zinc-900/90 border-zinc-700 text-zinc-200';
+    
+    let borderGrad = 'border-pink-500/40 shadow-pink-950/30';
+    let icon = '✨';
+    let textGrad = 'text-pink-100';
+    if (type === 'error') {
+        borderGrad = 'border-rose-500/60 shadow-rose-950/50';
+        icon = '⚠️';
+        textGrad = 'text-rose-200';
+    } else if (type === 'success') {
+        borderGrad = 'border-emerald-400/50 shadow-emerald-950/50';
+        icon = '🌸';
+        textGrad = 'text-emerald-100';
+    }
 
-    toast.className = `pointer-events-auto flex items-center space-x-2 px-4 py-3 rounded-xl border text-xs shadow-xl backdrop-blur transition-all duration-300 transform translate-y-2 opacity-0 ${bgClass}`;
-    toast.innerHTML = `<span>${message}</span>`;
+    toast.className = `pointer-events-auto flex items-center space-x-2.5 px-4 py-3 rounded-2xl border ${borderGrad} text-xs font-semibold shadow-2xl backdrop-blur-xl bg-[#0e0f1e]/95 toast-anime ${textGrad}`;
+    toast.innerHTML = `<span class="text-sm shrink-0">${icon}</span><span class="leading-snug">${message}</span>`;
     container.appendChild(toast);
 
-    requestAnimationFrame(() => {
-        toast.classList.remove('translate-y-2', 'opacity-0');
-    });
-
     setTimeout(() => {
-        toast.classList.add('opacity-0', 'translate-y-2');
-        setTimeout(() => toast.remove(), 300);
-    }, 3500);
+        toast.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px) scale(0.95)';
+        setTimeout(() => toast.remove(), 320);
+    }, 4200);
 }
 
 // Navigation & Tab Switching
@@ -96,10 +105,10 @@ function switchTab(tabId) {
         const btn = document.getElementById(`tab-${tab}`);
         if (tab === tabId) {
             view.classList.remove('hidden');
-            btn.className = 'flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-zinc-800 shadow-sm';
+            btn.className = 'flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40';
         } else {
             view.classList.add('hidden');
-            btn.className = 'flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50';
+            btn.className = 'flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5';
         }
     });
 
@@ -107,6 +116,67 @@ function switchTab(tabId) {
         loadGallery(false);
     } else if (tabId === 'workflow') {
         loadWorkflowTemplate();
+    }
+}
+
+// ==========================================
+// WORKFLOW UPLOAD & DRAG-AND-DROP HANDLERS
+// ==========================================
+async function handleWorkflowFileInput(files) {
+    if (!files || !files.length) return;
+    const file = files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showToast(`(っ＾▿＾)っ 📂 Importing "${file.name}"...`, 'info');
+
+    try {
+        const res = await fetch('/api/comfy/workflows/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+            throw new Error(err.detail || 'Upload failed');
+        }
+
+        const data = await res.json();
+        showToast(`(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧ ${data.message}`, 'success');
+
+        // Reload workflows list and activate imported one
+        if (data.workflows) {
+            state.availableWorkflows = data.workflows;
+        }
+        await loadAvailableWorkflows();
+
+        if (data.imported && data.imported.id) {
+            await switchActiveWorkflow(data.imported.id);
+        }
+
+    } catch (e) {
+        showToast(`(・_・;) ❌ Import failed: ${e.message}`, 'error');
+    }
+}
+
+function handleWorkflowDragOver(e) {
+    e.preventDefault();
+    const dropzone = document.getElementById('workflow-dropzone');
+    if (dropzone) dropzone.classList.add('dragover');
+}
+
+function handleWorkflowDragLeave(e) {
+    e.preventDefault();
+    const dropzone = document.getElementById('workflow-dropzone');
+    if (dropzone) dropzone.classList.remove('dragover');
+}
+
+function handleWorkflowDrop(e) {
+    e.preventDefault();
+    const dropzone = document.getElementById('workflow-dropzone');
+    if (dropzone) dropzone.classList.remove('dragover');
+    if (e.dataTransfer && e.dataTransfer.files) {
+        handleWorkflowFileInput(e.dataTransfer.files);
     }
 }
 
@@ -599,8 +669,8 @@ function toggleTagPalette(category) {
     tags.forEach(t => {
         const pill = document.createElement('button');
         pill.type = 'button';
-        pill.className = 'px-2 py-0.5 rounded-md text-[11px] bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 hover:border-zinc-700 transition-colors flex items-center gap-1';
-        pill.innerHTML = `<span>+</span><span>${t}</span>`;
+        pill.className = 'tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-pink-500/30 text-[11px]';
+        pill.innerHTML = `<span class="text-pink-400 font-bold">+</span><span>${t}</span>`;
         pill.onclick = () => insertTagIntoActivePrompt(t);
         drawer.appendChild(pill);
     });
@@ -1564,6 +1634,21 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Global drag & drop support for workflow files (.json / .png)
+window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+});
+window.addEventListener('drop', (e) => {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith('.json') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+            e.preventDefault();
+            handleWorkflowFileInput(e.dataTransfer.files);
+        }
+    }
+});
+
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
@@ -1576,3 +1661,4 @@ window.addEventListener('DOMContentLoaded', () => {
 
     setInterval(checkComfyStatus, 10000);
 });
+

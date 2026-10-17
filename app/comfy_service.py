@@ -87,7 +87,7 @@ class ComfyService:
             logger.warning(f"Failed to write active workflow ID: {e}")
 
     async def list_available_workflows(self) -> List[Dict[str, Any]]:
-        """List workflows from default template, ComfyUI server (/userdata?dir=workflows/), and local workflows dir."""
+        """List workflows from default template, ComfyUI server (/userdata), and local workflows dir."""
         active_id = self.get_active_workflow_id()
         workflows = [
             {
@@ -114,37 +114,104 @@ class ComfyService:
         except Exception as e:
             logger.warning(f"Error reading local workflows: {e}")
 
-        # 2. Check ComfyUI server userdata endpoint
+        # 2. Check ComfyUI server userdata endpoints
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
-                for url in [
-                    f"{self.comfy_url}/userdata?dir=workflows/",
-                    f"{self.comfy_url}/api/userdata?dir=workflows/",
-                    f"{self.comfy_url}/userdata",
-                ]:
-                    try:
-                        res = await client.get(url)
-                        if res.status_code == 200:
-                            data = res.json()
-                            items = data if isinstance(data, list) else data.get("files", [])
-                            for item in items:
-                                fname = item if isinstance(item, str) else item.get("name", "")
-                                if fname.endswith(".json"):
-                                    clean_name = fname.replace("workflows/", "").replace("\\", "/")
-                                    wid = f"server:{clean_name}"
-                                    workflows.append({
-                                        "id": wid,
-                                        "name": Path(clean_name).stem.replace("_", " ").title(),
-                                        "source": "server",
-                                        "filename": clean_name,
-                                        "is_active": active_id == wid,
-                                    })
-                            break
-                    except Exception:
-                        continue
-        except Exception as e:
-            logger.debug(f"Could not fetch server workflows: {e}")
+                # First discover users (default, plus any multi-user IDs)
+                user_ids = ["default"]
+                try:
+                    user_res = await client.get(f"{self.comfy_url}/users")
+                    if user_res.status_code == 200:
+                        users_data = user_res.json()
+                        if isinstance(users_data, dict):
+                            user_ids = list(users_data.keys())
+                        elif isinstance(users_data, list):
+                            user_ids = [u if isinstance(u, str) else u.get("id", "default") for u in users_data]
+                except Exception:
+                    pass
 
+                discovered_filenames = set()
+
+                for uid in user_ids:
+                    headers = {"comfy-user": uid}
+                    # Test various paths and endpoints
+                    probe_urls = [
+                        f"{self.comfy_url}/v2/userdata?path=workflows",
+                        f"{self.comfy_url}/v2/userdata?path=",
+                        f"{self.comfy_url}/userdata?dir=workflows&recurse=true",
+                        f"{self.comfy_url}/userdata?dir=workflows/&recurse=true",
+                        f"{self.comfy_url}/userdata?dir=&recurse=true",
+                        f"{self.comfy_url}/userdata?dir=workflows",
+                        f"{self.comfy_url}/userdata?dir=workflows/",
+                        f"{self.comfy_url}/api/userdata?dir=workflows/",
+                        f"{self.comfy_url}/userdata",
+                    ]
+
+                    for url in probe_urls:
+                        try:
+                            res = await client.get(url, headers=headers)
+                            if res.status_code == 200:
+                                data = res.json()
+                                items = []
+                                if isinstance(data, list):
+                                    items = data
+                                elif isinstance(data, dict):
+                                    items = data.get("files", []) or data.get("items", []) or []
+
+                                for item in items:
+                                    # v2/userdata item: {"name": "foo.json", "type": "file", "path": "workflows/foo.json"}
+                                    # userdata item: "workflows/foo.json" or "foo.json"
+                                    raw_path = ""
+                                    if isinstance(item, dict):
+                                        if item.get("type") == "directory":
+                                            continue
+                                        raw_path = item.get("path") or item.get("name", "")
+                                    elif isinstance(item, str):
+                                        raw_path = item
+
+                                    if raw_path.lower().endswith(".json"):
+                                        clean_name = raw_path.replace("workflows/", "").replace("workflows\\", "").replace("\\", "/")
+                                        if clean_name not in discovered_filenames:
+                                            discovered_filenames.add(clean_name)
+                                            wid = f"server:{clean_name}"
+                                            display_name = Path(clean_name).stem.replace("_", " ").title()
+                                            workflows.append({
+                                                "id": wid,
+                                                "name": f"☁️ {display_name}",
+                                                "source": "server",
+                                                "filename": clean_name,
+                                                "is_active": active_id == wid,
+                                            })
+                        except Exception as e:
+                            logger.debug(f"Error querying {url}: {e}")
+
+                # Also probe PySSSSS (ComfyUI-Custom-Scripts workflow manager)
+                try:
+                    res = await client.get(f"{self.comfy_url}/pysssss/workflows")
+                    if res.status_code == 200:
+                        pysssss_items = res.json()
+                        if isinstance(pysssss_items, list):
+                            for p_item in pysssss_items:
+                                p_name = p_item if isinstance(p_item, str) else p_item.get("name", "")
+                                if p_name.lower().endswith(".json"):
+                                    clean_name = p_name.replace("\\", "/")
+                                    if clean_name not in discovered_filenames:
+                                        discovered_filenames.add(clean_name)
+                                        wid = f"server:{clean_name}"
+                                        workflows.append({
+                                            "id": wid,
+                                            "name": f"📜 {Path(clean_name).stem.replace('_', ' ').title()}",
+                                            "source": "server",
+                                            "filename": clean_name,
+                                            "is_active": active_id == wid,
+                                        })
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logger.warning(f"Could not fetch server workflows: {e}")
+
+        logger.info(f"Discovered {len(workflows)} available workflows.")
         return workflows
 
     async def fetch_workflow_by_id(self, workflow_id: str) -> Dict[str, Any]:
@@ -165,27 +232,132 @@ class ComfyService:
 
         if workflow_id.startswith("server:"):
             filename = workflow_id.replace("server:", "", 1)
-            async with httpx.AsyncClient(timeout=6.0) as client:
-                for url in [
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                # Find candidate user headers
+                user_ids = ["default"]
+                try:
+                    user_res = await client.get(f"{self.comfy_url}/users")
+                    if user_res.status_code == 200:
+                        u_data = user_res.json()
+                        if isinstance(u_data, dict):
+                            user_ids = list(u_data.keys())
+                        elif isinstance(u_data, list):
+                            user_ids = [u if isinstance(u, str) else u.get("id", "default") for u in u_data]
+                except Exception:
+                    pass
+
+                candidate_urls = [
+                    f"{self.comfy_url}/v2/userdata/workflows/{filename}",
+                    f"{self.comfy_url}/v2/userdata/{filename}",
                     f"{self.comfy_url}/userdata/workflows/{filename}",
-                    f"{self.comfy_url}/api/userdata/workflows/{filename}",
                     f"{self.comfy_url}/userdata/{filename}",
-                ]:
-                    try:
-                        res = await client.get(url)
-                        if res.status_code == 200:
-                            data = res.json()
-                            if isinstance(data, dict):
-                                if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
-                                    return data["extra"]["prompt"]
-                                if "prompt" in data and isinstance(data["prompt"], dict):
-                                    return data["prompt"]
-                                return data
-                    except Exception:
-                        continue
+                    f"{self.comfy_url}/pysssss/workflows/{filename}",
+                    f"{self.comfy_url}/api/userdata/workflows/{filename}",
+                    f"{self.comfy_url}/userdata?file=workflows/{filename}",
+                    f"{self.comfy_url}/userdata?file={filename}",
+                ]
+
+                for uid in user_ids:
+                    headers = {"comfy-user": uid}
+                    for url in candidate_urls:
+                        try:
+                            res = await client.get(url, headers=headers)
+                            if res.status_code == 200:
+                                data = res.json()
+                                if isinstance(data, dict):
+                                    if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
+                                        return data["extra"]["prompt"]
+                                    if "prompt" in data and isinstance(data["prompt"], dict):
+                                        return data["prompt"]
+                                    return data
+                        except Exception:
+                            continue
             raise FileNotFoundError(f"Server workflow not found: {filename}")
 
         raise ValueError(f"Unknown workflow id: {workflow_id}")
+
+    def import_workflow_file(self, filename: str, content_bytes: bytes) -> Dict[str, Any]:
+        """
+        Import a workflow from an uploaded .json or .png file.
+        Saves into WORKFLOWS_DIR, activates it, and returns workflow dict and metadata.
+        """
+        import io
+        from PIL import Image
+
+        safe_stem = Path(filename).stem
+        # Clean stem to valid filename
+        clean_stem = re.sub(r'[^a-zA-Z0-9_\-\s]', '', safe_stem).strip().replace(' ', '_')
+        if not clean_stem:
+            clean_stem = "imported_workflow"
+
+        target_json_name = f"{clean_stem}.json"
+        target_path = WORKFLOWS_DIR / target_json_name
+
+        workflow_data: Dict[str, Any] = {}
+
+        if filename.lower().endswith(".json"):
+            try:
+                parsed = json.loads(content_bytes.decode("utf-8"))
+            except Exception as e:
+                raise ValueError(f"Invalid JSON file: {e}")
+
+            if isinstance(parsed, dict):
+                if "extra" in parsed and isinstance(parsed["extra"], dict) and "prompt" in parsed["extra"]:
+                    workflow_data = parsed["extra"]["prompt"]
+                elif "prompt" in parsed and isinstance(parsed["prompt"], dict):
+                    workflow_data = parsed["prompt"]
+                else:
+                    workflow_data = parsed
+            else:
+                raise ValueError("JSON content must be a workflow dictionary / graph.")
+
+        elif filename.lower().endswith((".png", ".webp")):
+            try:
+                with Image.open(io.BytesIO(content_bytes)) as img:
+                    raw_info = getattr(img, "info", {}) or {}
+                    prompt_str = raw_info.get("prompt")
+                    workflow_str = raw_info.get("workflow")
+
+                    if prompt_str:
+                        if isinstance(prompt_str, str):
+                            workflow_data = json.loads(prompt_str)
+                        else:
+                            workflow_data = prompt_str
+                    elif workflow_str:
+                        if isinstance(workflow_str, str):
+                            wf_dict = json.loads(workflow_str)
+                        else:
+                            wf_dict = workflow_str
+                        if isinstance(wf_dict, dict) and "extra" in wf_dict and "prompt" in wf_dict["extra"]:
+                            workflow_data = wf_dict["extra"]["prompt"]
+                        else:
+                            workflow_data = wf_dict
+                    else:
+                        raise ValueError("No embedded ComfyUI workflow or prompt found in PNG metadata.")
+            except Exception as e:
+                raise ValueError(f"Failed to extract workflow from image: {e}")
+        else:
+            raise ValueError("Supported formats are .json or .png/.webp image files.")
+
+        if not isinstance(workflow_data, dict) or not workflow_data:
+            raise ValueError("Parsed workflow is empty or invalid.")
+
+        # Save to local workflows directory
+        with open(target_path, "w", encoding="utf-8") as f:
+            json.dump(workflow_data, f, indent=2)
+
+        # Activate imported workflow
+        self.save_workflow_template(workflow_data)
+        wid = f"local:{target_json_name}"
+        self.set_active_workflow_id(wid)
+
+        display_name = clean_stem.replace("_", " ").title()
+        return {
+            "id": wid,
+            "name": f"✨ {display_name}",
+            "filename": target_json_name,
+            "workflow": workflow_data,
+        }
 
     async def save_workflow(self, filename: str, workflow_dict: Dict[str, Any], destination: str = "local") -> bool:
         """Save workflow to local storage or ComfyUI server."""
@@ -201,6 +373,7 @@ class ComfyService:
                 async with httpx.AsyncClient(timeout=6.0) as client:
                     res = await client.post(
                         f"{self.comfy_url}/userdata/workflows/{clean_name}",
+                        headers={"comfy-user": "default"},
                         json=workflow_dict
                     )
                     return res.status_code in (200, 201)

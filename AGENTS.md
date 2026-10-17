@@ -9,9 +9,10 @@ This document provides a concise architectural guide and technical reference for
 `comfyui-web-frontend` (ComfyUI Studio) is a lightweight, responsive web interface acting as a dedicated frontend for a local or remote ComfyUI instance.
 
 Key Goals:
-- **Zero build step frontend**: Vanilla JavaScript + HTML5 styled with Tailwind CSS via CDN.
+- **Zero build step frontend**: Vanilla JavaScript + HTML5 styled with Tailwind CSS via CDN and custom anime aesthetic CSS.
+- **Playful Anime Aesthetic**: Vibrant midnight twilight background, sakura pink and neon lavender glowing cards, playful kaomoji decals, bouncy micro-interactions, custom anime sliders, and candy Danbooru category pills.
 - **Danbooru style tagging**: Sub-millisecond indexed typeahead autocomplete with ~140,000 Danbooru tags, category badges (general, character, copyright, artist, meta), post counts, weighting shortcuts (`Ctrl+Up`/`Ctrl+Down`), quick tag palettes, and prompt formatting utilities.
-- **ComfyUI Server Workflows**: Seamlessly discovers, loads, and activates workflows directly from ComfyUI server storage (`/userdata?dir=workflows/`) or local files (`appdata/workflows/`).
+- **ComfyUI Server & Drag-and-Drop Workflows**: Seamlessly discovers and activates workflows from ComfyUI server (`/userdata`, `/v2/userdata`, PySSSSS `/pysssss/workflows`), local storage (`appdata/workflows/`), or direct drag-and-drop import from `.json` or generated `.png` files.
 - **Configurable Defaults**: Default negative prompt configured via environment variable `DEFAULT_NEGATIVE_PROMPT`.
 - **WebSocket progress tracking**: Streams real-time progress percentages, step counts, and active node status directly to the browser.
 - **Persistent Filesystem Gallery**: Does **not** rely on ComfyUI's volatile `/history` endpoint. Crawls mounted output directory (`/app/output`) on startup, monitors changes in real-time with `watchfiles`, extracts embedded PNG metadata, and provides permanent image deletion.
@@ -114,6 +115,7 @@ Key Goals:
 | `GET` | `/api/comfy/workflows/{id}` | Fetch specific workflow JSON content |
 | `POST` | `/api/comfy/workflows/activate` | Activate a specific workflow for generation |
 | `POST` | `/api/comfy/workflows/save` | Save workflow to ComfyUI server or local storage |
+| `POST` | `/api/comfy/workflows/upload` | Upload & activate workflow from `.json` or ComfyUI `.png` image |
 | `POST` | `/api/generate` | Validate form inputs, inject nodes, queue prompt to ComfyUI |
 | `POST` | `/api/interrupt` | Send interrupt signal to ComfyUI |
 | `GET` | `/api/images` | List gallery images (supports `query`, `sort`, `limit`, `offset`) |

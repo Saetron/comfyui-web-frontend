@@ -9,7 +9,10 @@ A lightweight, Dockerized web interface in Python (**FastAPI** + **vanilla HTML 
 
 ## Features
 
-### 1. 🎨 Generator View & Danbooru Tagging
+### 1. 🌸 Playful Anime Aesthetic & Danbooru Tagging
+- **Playful Anime Design (スタジオ)**:
+  - Vibrant cosmic midnight background with soft sakura pink and neon lavender glowing cards.
+  - Playful kaomoji decals `(✿◠‿◠)`, bouncy buttons, cute Japanese subtitles, and custom candy sliders.
 - **Danbooru Style Autocomplete**:
   - Embedded **140,000+ tag dictionary** with live frequency counts and alias support.
   - Autocomplete dropdown pops up as you type in positive or negative prompt textareas.
@@ -22,8 +25,9 @@ A lightweight, Dockerized web interface in Python (**FastAPI** + **vanilla HTML 
   - Utilities: `space ➔ _`, `_ ➔ space`, and `🧹 Clean & Deduplicate`.
 - **Configurable Standard Negative Prompt**:
   - Configure your favorite baseline negative prompt via the `DEFAULT_NEGATIVE_PROMPT` environment variable.
-- **Workflow Management**:
-  - Switch active workflow on the fly from a dropdown: Default baseline, workflows stored on your **ComfyUI Server** (`/userdata`), or local workflows in `appdata/workflows/`.
+- **Drag-and-Drop & Server Workflow Management**:
+  - **Instant Import**: Drag & drop any ComfyUI `.json` workflow or generated `.png` image directly onto the browser to extract and activate the workflow.
+  - Seamlessly discovers workflows stored on your **ComfyUI Server** (`/userdata`, `/v2/userdata`, and PySSSSS `/pysssss/workflows`), or local workflows in `appdata/workflows/`.
 - **Live Progress & WebSocket Tracking**:
   - Real-time percentage, step counter, active node status, and queue depth.
   - Live result preview displayed immediately upon generation completion (`Ctrl+Enter` to generate).
