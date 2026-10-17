@@ -285,6 +285,51 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
             except (ValueError, TypeError):
                 pass
 
+        if "width" not in params or "height" not in params:
+            for rk in ["resolution", "dimensions", "aspect_ratio", "preset", "size"]:
+                val = inputs.get(rk)
+                if val and isinstance(val, str):
+                    m = re.search(r'(\d+)\s*[xX*×]\s*(\d+)', val)
+                    if m:
+                        try:
+                            params["width"] = int(m.group(1))
+                            params["height"] = int(m.group(2))
+                            params["generation_resolution"] = f"{params['width']}x{params['height']}"
+                            break
+                        except (ValueError, TypeError):
+                            pass
+
+    # Fallback: scan all nodes if width/height not resolved yet
+    if "width" not in params or "height" not in params:
+        for nid, node in prompt_graph.items():
+            if not isinstance(node, dict):
+                continue
+            n_in = node.get("inputs", {})
+            w = n_in.get("width") or n_in.get("empty_latent_width")
+            h = n_in.get("height") or n_in.get("empty_latent_height")
+            if isinstance(w, (int, float, str)) and isinstance(h, (int, float, str)):
+                try:
+                    params["width"] = int(w)
+                    params["height"] = int(h)
+                    params["generation_resolution"] = f"{params['width']}x{params['height']}"
+                    break
+                except (ValueError, TypeError):
+                    pass
+            for rk in ["resolution", "dimensions", "aspect_ratio"]:
+                val = n_in.get(rk)
+                if val and isinstance(val, str):
+                    m = re.search(r'(\d+)\s*[xX*×]\s*(\d+)', val)
+                    if m:
+                        try:
+                            params["width"] = int(m.group(1))
+                            params["height"] = int(m.group(2))
+                            params["generation_resolution"] = f"{params['width']}x{params['height']}"
+                            break
+                        except (ValueError, TypeError):
+                            pass
+            if "width" in params and "height" in params:
+                break
+
     return params
 
 

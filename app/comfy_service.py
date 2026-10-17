@@ -3,7 +3,9 @@ import copy
 import json
 import logging
 import random
+import re
 import shutil
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -59,11 +61,38 @@ class ComfyService:
         return {}
 
     def save_workflow_template(self, workflow_dict: Dict[str, Any]):
-        """Save updated workflow API JSON template."""
+        """Save updated workflow API JSON template, and update active local workflow file if applicable."""
         WORKFLOW_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(WORKFLOW_FILE, "w", encoding="utf-8") as f:
             json.dump(workflow_dict, f, indent=2)
         logger.info(f"Updated workflow template at {WORKFLOW_FILE}")
+
+        # If a local workflow file is currently active, sync the updated parameters to it as well
+        active_id = self.get_active_workflow_id()
+        if active_id and active_id.startswith("local:"):
+            filename = active_id.replace("local:", "", 1)
+            target_path = getattr(self, "_local_workflow_paths", {}).get(active_id)
+            if not target_path or not target_path.exists():
+                for d in WORKFLOW_SEARCH_DIRS:
+                    if not d.exists():
+                        continue
+                    candidate = d / filename
+                    if candidate.exists() and candidate.is_file():
+                        target_path = candidate
+                        break
+                    for p in d.rglob(filename):
+                        if p.exists() and p.is_file():
+                            target_path = p
+                            break
+                    if target_path:
+                        break
+            if target_path and target_path.exists() and target_path.suffix.lower() == ".json":
+                try:
+                    with open(target_path, "w", encoding="utf-8") as f:
+                        json.dump(workflow_dict, f, indent=2)
+                    logger.info(f"Updated selected local workflow file at {target_path}")
+                except Exception as e:
+                    logger.warning(f"Could not update local workflow file {target_path}: {e}")
 
     def reset_workflow_template(self) -> Dict[str, Any]:
         """Reset workflow to original default template."""
@@ -627,82 +656,46 @@ class ComfyService:
                         resolved_params["ckpt_name"] = str(extra["ckpt_name"])
                         break
 
-        # Dimensions injection (Latent creation, Aspect Ratio, SDXL Conditioning, and Primitive links)
+        # Comprehensive Dimensions injection: Latent creation, Aspect Ratio, SDXL Conditioning, and Primitive links
         target_width = int(extra["width"]) if extra.get("width") else None
         target_height = int(extra["height"]) if extra.get("height") else None
 
         if target_width or target_height:
-            def update_node_dim(node: Dict[str, Any], w: Optional[int], h: Optional[int]):
-                n_inputs = node.setdefault("inputs", {})
+            modified_nodes = set()
 
-                # If width input is a link [provider_id, slot], update upstream provider as well
-                w_link = n_inputs.get("width")
-                if isinstance(w_link, list) and len(w_link) > 0 and str(w_link[0]) in prompt_graph:
-                    w_provider = prompt_graph[str(w_link[0])]
-                    wp_in = w_provider.setdefault("inputs", {})
-                    if "value" in wp_in and w:
-                        wp_in["value"] = w
-                    if "width" in wp_in and w:
-                        wp_in["width"] = w
+            # 1. Update upstream PrimitiveNodes linked to width or height
+            for nid, node in list(prompt_graph.items()):
+                if not isinstance(node, dict):
+                    continue
+                inputs = node.setdefault("inputs", {})
+                for k, v in list(inputs.items()):
+                    if isinstance(v, list) and len(v) > 0 and str(v[0]) in prompt_graph:
+                        k_lower = k.lower()
+                        p_node = prompt_graph[str(v[0])]
+                        p_in = p_node.setdefault("inputs", {})
+                        if "width" in k_lower:
+                            if "value" in p_in and target_width:
+                                p_in["value"] = target_width
+                                modified_nodes.add(str(v[0]))
+                            if "width" in p_in and target_width:
+                                p_in["width"] = target_width
+                                modified_nodes.add(str(v[0]))
+                        elif "height" in k_lower:
+                            if "value" in p_in and target_height:
+                                p_in["value"] = target_height
+                                modified_nodes.add(str(v[0]))
+                            if "height" in p_in and target_height:
+                                p_in["height"] = target_height
+                                modified_nodes.add(str(v[0]))
 
-                # If height input is a link [provider_id, slot], update upstream provider as well
-                h_link = n_inputs.get("height")
-                if isinstance(h_link, list) and len(h_link) > 0 and str(h_link[0]) in prompt_graph:
-                    h_provider = prompt_graph[str(h_link[0])]
-                    hp_in = h_provider.setdefault("inputs", {})
-                    if "value" in hp_in and h:
-                        hp_in["value"] = h
-                    if "height" in hp_in and h:
-                        hp_in["height"] = h
-
-                # Set dimensions on the node itself
-                if w:
-                    n_inputs["width"] = w
-                if h:
-                    n_inputs["height"] = h
-
-                # Handle empty_latent_width / empty_latent_height (Efficient Loader)
-                if "empty_latent_width" in n_inputs and w:
-                    n_inputs["empty_latent_width"] = w
-                if "empty_latent_height" in n_inputs and h:
-                    n_inputs["empty_latent_height"] = h
-
-            # 1. First priority: Trace directly from active KSampler's latent_image link
-            if ksampler_node:
-                latent_link = ksampler_node.get("inputs", {}).get("latent_image")
-                if isinstance(latent_link, list) and len(latent_link) > 0:
-                    curr_id = str(latent_link[0])
-                    visited = set()
-                    while curr_id in prompt_graph and curr_id not in visited:
-                        visited.add(curr_id)
-                        curr_node = prompt_graph[curr_id]
-                        c_type = curr_node.get("class_type", "")
-                        c_inputs = curr_node.get("inputs", {})
-
-                        is_latent_source = (
-                            "width" in c_inputs
-                            or "empty_latent_width" in c_inputs
-                            or any(k in c_type for k in ["EmptyLatent", "EmptySD", "LatentImage", "Aspect", "Size", "Resolution"])
-                        )
-
-                        if is_latent_source:
-                            update_node_dim(curr_node, target_width, target_height)
-                            break
-
-                        # Walk upstream
-                        upstream = c_inputs.get("samples") or c_inputs.get("latent") or c_inputs.get("latent_image")
-                        if isinstance(upstream, list) and len(upstream) > 0:
-                            curr_id = str(upstream[0])
-                        else:
-                            break
-
-            # 2. General scan: Update all Empty Latent, Aspect Ratio, and Sizing nodes in the workflow
-            for nid, node in prompt_graph.items():
+            # 2. Comprehensive node update: Dimensions, Aspect Ratio presets, and Latent generators
+            for nid, node in list(prompt_graph.items()):
                 if not isinstance(node, dict):
                     continue
                 c_type = node.get("class_type", "")
-                c_inputs = node.setdefault("inputs", {})
+                inputs = node.setdefault("inputs", {})
 
+                # Check if this node handles dimensions
                 is_dim_node = (
                     c_type in [
                         "EmptyLatentImage",
@@ -716,29 +709,67 @@ class ComfyService:
                         "CR Aspect Ratio",
                         "CR SD1.5 Aspect Ratio",
                     ]
-                    or any(k in c_type for k in ["EmptyLatent", "EmptySD", "Aspect"])
-                    or ("width" in c_inputs and "height" in c_inputs and any(k in c_type for k in ["Latent", "Image", "Resolution"]))
-                    or ("empty_latent_width" in c_inputs)
+                    or any(k in c_type for k in ["EmptyLatent", "EmptySD", "SDXLEmptyLatent", "LatentImage", "Aspect", "Resolution", "Size"])
+                    or any(k in inputs for k in ["width", "height", "empty_latent_width", "empty_latent_height", "aspect_ratio", "resolution"])
                 )
 
                 if is_dim_node:
-                    update_node_dim(node, target_width, target_height)
+                    # Update explicit numeric width keys
+                    for wk in ["width", "empty_latent_width", "target_width", "original_width", "max_width"]:
+                        if wk in inputs and target_width:
+                            inputs[wk] = target_width
+                            modified_nodes.add(nid)
+                    # Update explicit numeric height keys
+                    for hk in ["height", "empty_latent_height", "target_height", "original_height", "max_height"]:
+                        if hk in inputs and target_height:
+                            inputs[hk] = target_height
+                            modified_nodes.add(nid)
 
-                # 3. Synchronize SDXL conditioning dimensions (CLIPTextEncodeSDXL)
-                if "CLIPTextEncodeSDXL" in c_type:
+                    # Aspect Ratio custom override (Critical for CR SDXL Aspect Ratio, CR Aspect Ratio, etc.)
+                    for ark in ["aspect_ratio", "aspect_ratio_preset", "aspect"]:
+                        if ark in inputs:
+                            inputs[ark] = "custom"
+                            modified_nodes.add(nid)
+                    if "swap_dimensions" in inputs:
+                        inputs["swap_dimensions"] = "Off"
+                        modified_nodes.add(nid)
+
+                    # Update resolution strings (e.g. "1024x1024 (1:1)" or "1024x1024")
+                    for rk in ["resolution", "dimensions", "preset", "size"]:
+                        if rk in inputs and isinstance(inputs[rk], str):
+                            if re.search(r'\d+\s*[xX*×]\s*\d+', inputs[rk]):
+                                inputs[rk] = f"{target_width}x{target_height}"
+                                modified_nodes.add(nid)
+
+                    # Ensure empty latent nodes have width and height populated
+                    if any(k in c_type for k in ["EmptyLatent", "EmptySD", "SDXLEmptyLatent", "LatentImage"]):
+                        if target_width:
+                            inputs["width"] = target_width
+                        if target_height:
+                            inputs["height"] = target_height
+                        modified_nodes.add(nid)
+
+                # 3. Synchronize SDXL conditioning dimensions (CLIPTextEncodeSDXL, etc.)
+                if "CLIPTextEncodeSDXL" in c_type or "SDXL" in c_type:
                     if target_width:
-                        c_inputs["width"] = target_width
-                        if "target_width" in c_inputs:
-                            c_inputs["target_width"] = target_width
+                        if "width" in inputs: inputs["width"] = target_width
+                        if "target_width" in inputs: inputs["target_width"] = target_width
+                        if "original_width" in inputs: inputs["original_width"] = target_width
+                        modified_nodes.add(nid)
                     if target_height:
-                        c_inputs["height"] = target_height
-                        if "target_height" in c_inputs:
-                            c_inputs["target_height"] = target_height
+                        if "height" in inputs: inputs["height"] = target_height
+                        if "target_height" in inputs: inputs["target_height"] = target_height
+                        if "original_height" in inputs: inputs["original_height"] = target_height
+                        modified_nodes.add(nid)
 
             if target_width:
                 resolved_params["width"] = target_width
             if target_height:
                 resolved_params["height"] = target_height
+
+            logger.info(
+                f"Injected resolution {target_width}x{target_height} into {len(modified_nodes)} node(s): {list(modified_nodes)}"
+            )
 
         return prompt_graph, resolved_params
 

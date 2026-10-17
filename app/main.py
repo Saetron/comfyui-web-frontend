@@ -373,6 +373,17 @@ async def generate_image(req: GenerateRequest):
             extra_params=extra,
         )
 
+        # Persist the injected workflow template so future generations and page reloads retain updated resolution & parameters
+        if i == 0:
+            try:
+                comfy_service.save_workflow_template(prompt_graph)
+            except Exception as e:
+                logger.warning(f"Failed to persist workflow template: {e}")
+
+        logger.info(
+            f"Queueing prompt (batch {i+1}/{batch_count}) with resolution {resolved_params.get('width')}x{resolved_params.get('height')}, seed={resolved_params.get('seed')}"
+        )
+
         prompt_client_id = f"{req.client_id}_{uuid.uuid4().hex[:6]}"
 
         try:

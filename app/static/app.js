@@ -1131,6 +1131,10 @@ function setResolution(w, h) {
     const hInput = document.getElementById('height-input');
     if (wInput) wInput.value = w;
     if (hInput) hInput.value = h;
+    if (state.activeWorkflowParams) {
+        state.activeWorkflowParams.width = w;
+        state.activeWorkflowParams.height = h;
+    }
     highlightActiveResPreset();
     showToast(`📐 Resolution set to ${w}×${h}`, 'info');
 }
