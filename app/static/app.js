@@ -952,21 +952,26 @@ function handleWsMessage(msg) {
         const data = msg.data || {};
         const params = msg.resolved_params || {};
 
+        const nodeLabel = document.getElementById('preview-progress-text') || document.getElementById('progress-node-label');
+        const statusHeading = document.getElementById('preview-status-heading') || document.getElementById('preview-status-pill');
+        const progressBar = document.getElementById('preview-progress-bar') || document.getElementById('progress-bar');
+        const progressPct = document.getElementById('preview-progress-pct') || document.getElementById('progress-percentage');
+
         if (data.type === 'status') {
             const queue = data.queue_remaining;
-            document.getElementById('progress-node-label').innerText = queue > 0 ? `In Queue (position: ${queue})...` : 'Starting generation...';
-            document.getElementById('preview-status-pill').innerText = 'Queued';
+            if (nodeLabel) nodeLabel.innerText = queue > 0 ? `In Queue (position: ${queue})...` : 'Starting generation...';
+            if (statusHeading) statusHeading.innerText = 'Queued';
         } else if (data.type === 'execution_start') {
-            document.getElementById('progress-node-label').innerText = 'Initializing nodes...';
-            document.getElementById('preview-status-pill').innerText = 'Running';
+            if (nodeLabel) nodeLabel.innerText = 'Initializing nodes...';
+            if (statusHeading) statusHeading.innerText = 'Running';
         } else if (data.type === 'executing') {
-            document.getElementById('progress-node-label').innerText = `Executing node #${data.node}...`;
+            if (nodeLabel) nodeLabel.innerText = `Executing node #${data.node}...`;
         } else if (data.type === 'progress') {
             const pct = data.percentage || 0;
-            document.getElementById('progress-bar').style.width = `${pct}%`;
-            document.getElementById('progress-percentage').innerText = `${pct}%`;
-            document.getElementById('progress-node-label').innerText = `Sampling: step ${data.value}/${data.max} (${pct}%)`;
-            document.getElementById('preview-status-pill').innerText = `Step ${data.value}/${data.max}`;
+            if (progressBar) progressBar.style.width = `${pct}%`;
+            if (progressPct) progressPct.innerText = `${pct}%`;
+            if (nodeLabel) nodeLabel.innerText = `Sampling: step ${data.value}/${data.max} (${pct}%)`;
+            if (statusHeading) statusHeading.innerText = `Step ${data.value}/${data.max}`;
         } else if (data.type === 'images_ready') {
             if (data.images && data.images.length > 0) {
                 const imgInfo = data.images[0];
@@ -978,8 +983,8 @@ function handleWsMessage(msg) {
         } else if (data.type === 'error') {
             finishGeneration();
             showToast(`Generation error: ${data.error}`, 'error');
-            document.getElementById('preview-status-pill').innerText = 'Error';
-            document.getElementById('progress-node-label').innerText = `Error: ${data.error}`;
+            if (statusHeading) statusHeading.innerText = 'Error';
+            if (nodeLabel) nodeLabel.innerText = `Error: ${data.error}`;
         }
     }
 }
@@ -1029,17 +1034,30 @@ function clearInput(id) {
 async function handleGenerate() {
     if (state.isGenerating) return;
 
-    const positivePrompt = document.getElementById('positive-prompt').value.trim();
-    const negativePrompt = document.getElementById('negative-prompt').value.trim();
-    const isRandomSeed = document.getElementById('seed-randomize').checked;
-    const rawSeed = document.getElementById('seed-input').value;
+    const positivePromptEl = document.getElementById('positive-prompt');
+    const positivePrompt = positivePromptEl ? positivePromptEl.value.trim() : '';
+    const negativePromptEl = document.getElementById('negative-prompt');
+    const negativePrompt = negativePromptEl ? negativePromptEl.value.trim() : '';
+
+    const seedRandomizeEl = document.getElementById('seed-randomize');
+    const isRandomSeed = seedRandomizeEl ? seedRandomizeEl.checked : true;
+    const seedInputEl = document.getElementById('seed-input');
+    const rawSeed = seedInputEl ? seedInputEl.value : '';
     const seed = isRandomSeed ? null : parseInt(rawSeed, 10);
 
     if (!positivePrompt) {
-        showToast('Please enter a positive prompt', 'error');
-        document.getElementById('positive-prompt').focus();
+        showToast('(・_・;) Please enter a positive prompt', 'error');
+        if (positivePromptEl) positivePromptEl.focus();
         return;
     }
+
+    const stepsEl = document.getElementById('steps-slider');
+    const cfgEl = document.getElementById('cfg-slider');
+    const widthEl = document.getElementById('width-input');
+    const heightEl = document.getElementById('height-input');
+    const ckptEl = document.getElementById('ckpt-select');
+    const samplerEl = document.getElementById('sampler-select');
+    const schedEl = document.getElementById('scheduler-select');
 
     const payload = {
         positive_prompt: positivePrompt,
@@ -1047,13 +1065,13 @@ async function handleGenerate() {
         seed: seed,
         randomize_seed: isRandomSeed,
         client_id: state.clientId,
-        steps: parseInt(document.getElementById('steps-slider').value, 10),
-        cfg: parseFloat(document.getElementById('cfg-slider').value),
-        width: parseInt(document.getElementById('width-input').value, 10) || null,
-        height: parseInt(document.getElementById('height-input').value, 10) || null,
-        ckpt_name: document.getElementById('ckpt-select').value || null,
-        sampler_name: document.getElementById('sampler-select').value || null,
-        scheduler: document.getElementById('scheduler-select').value || null,
+        steps: stepsEl ? parseInt(stepsEl.value, 10) : 20,
+        cfg: cfgEl ? parseFloat(cfgEl.value) : 7.5,
+        width: widthEl ? (parseInt(widthEl.value, 10) || null) : null,
+        height: heightEl ? (parseInt(heightEl.value, 10) || null) : null,
+        ckpt_name: (ckptEl && ckptEl.value) ? ckptEl.value : null,
+        sampler_name: (samplerEl && samplerEl.value) ? samplerEl.value : null,
+        scheduler: (schedEl && schedEl.value) ? schedEl.value : null,
     };
 
     state.isGenerating = true;
@@ -1062,15 +1080,21 @@ async function handleGenerate() {
     const btnGen = document.getElementById('btn-generate');
     const btnInterrupt = document.getElementById('btn-interrupt');
     const genText = document.getElementById('generate-text');
-    btnGen.disabled = true;
-    genText.innerText = 'Queuing...';
-    btnInterrupt.classList.remove('hidden');
+    if (btnGen) btnGen.disabled = true;
+    if (genText) genText.innerText = 'Queuing...';
+    if (btnInterrupt) btnInterrupt.classList.remove('hidden');
 
-    document.getElementById('progress-container').classList.remove('hidden');
-    document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('progress-percentage').innerText = '0%';
-    document.getElementById('progress-node-label').innerText = 'Contacting ComfyUI...';
-    document.getElementById('preview-status-pill').innerText = 'Queuing';
+    const progressContainer = document.getElementById('preview-progress-container') || document.getElementById('progress-container');
+    const progressBar = document.getElementById('preview-progress-bar') || document.getElementById('progress-bar');
+    const progressPct = document.getElementById('preview-progress-pct') || document.getElementById('progress-percentage');
+    const progressLabel = document.getElementById('preview-progress-text') || document.getElementById('progress-node-label');
+    const statusHeading = document.getElementById('preview-status-heading') || document.getElementById('preview-status-pill');
+
+    if (progressContainer) progressContainer.classList.remove('hidden');
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressPct) progressPct.innerText = '0%';
+    if (progressLabel) progressLabel.innerText = 'Contacting ComfyUI...';
+    if (statusHeading) statusHeading.innerText = 'Queuing';
 
     try {
         const res = await fetch('/api/generate', {
@@ -1080,21 +1104,21 @@ async function handleGenerate() {
         });
 
         if (!res.ok) {
-            const err = await res.json();
+            const err = await res.json().catch(() => ({ detail: 'Failed to submit generation' }));
             throw new Error(err.detail || 'Failed to submit generation');
         }
 
         const data = await res.json();
-        genText.innerText = 'Generating...';
+        if (genText) genText.innerText = 'Generating...';
 
-        if (data.resolved_params && data.resolved_params.seed) {
-            document.getElementById('seed-input').value = data.resolved_params.seed;
+        if (data.resolved_params && data.resolved_params.seed && seedInputEl) {
+            seedInputEl.value = data.resolved_params.seed;
         }
     } catch (e) {
         finishGeneration();
         showToast(e.message, 'error');
-        document.getElementById('preview-status-pill').innerText = 'Failed';
-        document.getElementById('progress-node-label').innerText = `Error: ${e.message}`;
+        if (statusHeading) statusHeading.innerText = 'Failed';
+        if (progressLabel) progressLabel.innerText = `Error: ${e.message}`;
     }
 }
 
@@ -1109,25 +1133,27 @@ async function handleInterrupt() {
 
 function startGenerationTimer() {
     state.generationStartTime = Date.now();
-    const timerElem = document.getElementById('gen-timer');
-    timerElem.innerText = '0.0s';
+    const timerElem = document.getElementById('preview-timer') || document.getElementById('gen-timer');
+    if (timerElem) timerElem.innerText = '0.0s';
+    if (state.generationTimerInterval) clearInterval(state.generationTimerInterval);
     state.generationTimerInterval = setInterval(() => {
         const elapsed = ((Date.now() - state.generationStartTime) / 1000).toFixed(1);
-        timerElem.innerText = `${elapsed}s`;
+        const t = document.getElementById('preview-timer') || document.getElementById('gen-timer');
+        if (t) t.innerText = `${elapsed}s`;
     }, 100);
 }
 
 function finishGeneration() {
     state.isGenerating = false;
-    clearInterval(state.generationTimerInterval);
+    if (state.generationTimerInterval) clearInterval(state.generationTimerInterval);
 
     const btnGen = document.getElementById('btn-generate');
     const btnInterrupt = document.getElementById('btn-interrupt');
     const genText = document.getElementById('generate-text');
 
-    btnGen.disabled = false;
-    genText.innerText = 'Generate Image';
-    btnInterrupt.classList.add('hidden');
+    if (btnGen) btnGen.disabled = false;
+    if (genText) genText.innerText = '(★ω★) 🚀 Spark Generation!';
+    if (btnInterrupt) btnInterrupt.classList.add('hidden');
 }
 
 function displayGeneratedImage(relative_path, params = {}) {
@@ -1139,22 +1165,29 @@ function displayGeneratedImage(relative_path, params = {}) {
     const wrapper = document.getElementById('preview-image-wrapper');
     const footer = document.getElementById('preview-meta-footer');
 
-    previewImg.src = imgUrl;
-    placeholder.classList.add('hidden');
-    wrapper.classList.remove('hidden');
-    footer.classList.remove('hidden');
+    if (previewImg) previewImg.src = imgUrl;
+    if (placeholder) placeholder.classList.add('hidden');
+    if (wrapper) wrapper.classList.remove('hidden');
+    if (footer) footer.classList.remove('hidden');
 
-    document.getElementById('preview-status-pill').innerText = 'Completed';
-    document.getElementById('progress-bar').style.width = '100%';
-    document.getElementById('progress-percentage').innerText = '100%';
-    document.getElementById('progress-node-label').innerText = 'Generation complete!';
+    const statusHeading = document.getElementById('preview-status-heading') || document.getElementById('preview-status-pill');
+    const progressBar = document.getElementById('preview-progress-bar') || document.getElementById('progress-bar');
+    const progressPct = document.getElementById('preview-progress-pct') || document.getElementById('progress-percentage');
+    const progressLabel = document.getElementById('preview-progress-text') || document.getElementById('progress-node-label');
 
-    if (params.seed) {
-        document.getElementById('preview-seed-badge').innerText = `Seed: ${params.seed}`;
+    if (statusHeading) statusHeading.innerText = 'Canvas Preview (プレビュー)';
+    if (progressBar) progressBar.style.width = '100%';
+    if (progressPct) progressPct.innerText = '100%';
+    if (progressLabel) progressLabel.innerText = 'Generation complete!';
+
+    const seedBadge = document.getElementById('preview-seed-badge');
+    if (seedBadge && params.seed) {
+        seedBadge.innerText = `Seed: ${params.seed}`;
     }
-    document.getElementById('preview-filename-badge').innerText = relative_path;
+    const fnBadge = document.getElementById('preview-filename-badge');
+    if (fnBadge) fnBadge.innerText = relative_path;
 
-    showToast('Image generated successfully!', 'success');
+    showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Image generated successfully! ✨', 'success');
 }
 
 function openCurrentInModal() {
@@ -1431,15 +1464,18 @@ function renderModalPromptTags(promptText) {
     const container = document.getElementById('modal-pos-tags');
     if (!container) return;
     container.innerHTML = '';
-    if (!promptText) return;
+    if (!promptText) {
+        container.innerHTML = '<span class="text-[11px] text-zinc-500 italic">No prompt tags found</span>';
+        return;
+    }
 
     const tags = promptText.split(',').map(s => s.trim()).filter(Boolean);
-    tags.slice(0, 45).forEach(t => {
+    tags.slice(0, 150).forEach(t => {
         const pill = document.createElement('button');
         pill.type = 'button';
-        pill.className = 'tag-pill-btn bg-white/5 hover:bg-pink-500/25 text-pink-200 border border-pink-500/30 text-[10px]';
+        pill.className = 'tag-pill-btn bg-pink-500/15 hover:bg-pink-500/35 text-pink-200 border border-pink-500/35 text-[10.5px] px-2.5 py-1 rounded-full font-medium transition-all hover:scale-105 active:scale-95';
         pill.innerText = t;
-        pill.title = 'Click to copy tag';
+        pill.title = `Click to copy "${t}"`;
         pill.onclick = () => {
             navigator.clipboard.writeText(t);
             showToast(`(づ｡◕‿‿◕｡)づ Copied tag: ${t}`, 'info');
