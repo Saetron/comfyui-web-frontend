@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: comfyui-web-frontend:latest
+    image: ghcr.io/saetron/comfyui-web-frontend:latest
     container_name: comfyui-web-frontend
     restart: unless-stopped
     ports:

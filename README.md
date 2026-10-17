@@ -1,5 +1,8 @@
 # ComfyUI Web Studio
 
+[![Build and Publish Docker Image](https://github.com/Saetron/comfyui-web-frontend/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Saetron/comfyui-web-frontend/actions/workflows/docker-publish.yml)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-Saetron%2Fcomfyui--web--frontend-blue?logo=docker)](https://github.com/Saetron/comfyui-web-frontend/pkgs/container/comfyui-web-frontend)
+
 A lightweight, Dockerized web interface in Python (**FastAPI** + **vanilla HTML / Tailwind CSS**) that acts as a custom, responsive frontend for your local ComfyUI instance.
 
 ---
