@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Web Studio</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        zinc: {
+                            850: '#1f1f23',
+                            950: '#0c0c0e',
+                        },
+                        brand: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%200%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Logo & Title -->
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-brand-600 to-violet-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight text-white flex items-center gap-2">
+                        ComfyUI Studio
+                        <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/50">v1.0</span>
+                    </h1>
+                </div>
+            </div>
+
+            <!-- View Tabs -->
+            <nav class="flex items-center space-x-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800">
+                <button id="tab-generator" onclick="switchTab('generator')" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-zinc-800 shadow-sm">
+                    <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    <span>Generator</span>
+                </button>
+                <button id="tab-gallery" onclick="switchTab('gallery')" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span>Gallery</span>
+                    <span id="gallery-count-badge" class="ml-1 text-xs px-1.5 py-0.5 rounded-full bg-zinc-800 text-zinc-300">0</span>
+                </button>
+                <button id="tab-workflow" onclick="switchTab('workflow')" class="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                    </svg>
+                    <span>Workflow JSON</span>
+                </button>
+            </nav>
+
+            <!-- Status Indicator -->
+            <div class="flex items-center space-x-3">
+                <div id="comfy-status-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-zinc-800 border border-zinc-700/60 text-zinc-300">
+                    <span id="status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span id="status-text">Checking ComfyUI...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- ========================================== -->
+        <!-- VIEW 1: GENERATOR VIEW                     -->
+        <!-- ========================================== -->
+        <section id="view-generator" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+                <!-- Left Column: Generator Form -->
+                <div class="lg:col-span-6 space-y-5">
+                    <div class="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-5">
+                        
+                        <!-- Positive Prompt -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="positive-prompt" class="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                    Positive Prompt
+                                </label>
+                                <button type="button" onclick="clearInput('positive-prompt')" class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Clear</button>
+                            </div>
+                            <textarea id="positive-prompt" rows="4" 
+                                placeholder="A stunning futuristic cyber city at dusk, holographic billboards, neon rain reflections on wet asphalt, volumetric lighting, photorealistic, 8k resolution, cinematic composition..."
+                                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-y"></textarea>
+                        </div>
+
+                        <!-- Negative Prompt -->
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label for="negative-prompt" class="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                                    Negative Prompt
+                                </label>
+                                <button type="button" onclick="clearInput('negative-prompt')" class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Clear</button>
+                            </div>
+                            <textarea id="negative-prompt" rows="2" 
+                                placeholder="ugly, deformed, disfigured, blurry, low quality, bad anatomy, bad hands, missing fingers, extra limbs, watermark, text"
+                                class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-y"></textarea>
+                        </div>
+
+                        <!-- Seed & Randomize Controls -->
+                        <div class="bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-4 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm font-medium text-zinc-200 flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                    </svg>
+                                    Seed Control
+                                </span>
+                                <label class="flex items-center space-x-2 cursor-pointer select-none">
+                                    <input type="checkbox" id="seed-randomize" checked onchange="toggleSeedInput()" class="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-brand-600 focus:ring-brand-500 focus:ring-offset-zinc-950">
+                                    <span class="text-xs font-medium text-zinc-300">Randomize Seed</span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center space-x-2">
+                                <input type="number" id="seed-input" disabled value="123456789"
+                                    class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-400 font-mono focus:outline-none focus:border-brand-500 disabled:opacity-50 transition-all">
+                                <button type="button" onclick="rollNewSeed()" title="Generate Random Seed"
+                                    class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 shadow-sm">
+                                    <span>🎲</span>
+                                    <span>Roll</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Parameters Accordion -->
+                        <div class="border border-zinc-800/80 rounded-xl overflow-hidden bg-zinc-950/40">
+                            <button type="button" onclick="toggleAdvancedAccordion()" class="w-full px-4 py-3 flex items-center justify-between text-left text-sm font-medium text-zinc-300 hover:text-white hover:bg-zinc-800/30 transition-colors">
+                                <span class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                    </svg>
+                                    Generation Settings (Model, Steps, CFG, Size)
+                                </span>
+                                <svg id="adv-arrow" class="w-4 h-4 text-zinc-500 transition-transform duration-200 transform rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                            <div id="adv-content" class="hidden px-4 pb-4 pt-2 space-y-4 border-t border-zinc-800/50">
+                                
+                                <!-- Model Checkpoint -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Checkpoint Model</label>
+                                    <select id="ckpt-select" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-500">
+                                        <option value="">(Default from Workflow)</option>
+                                    </select>
+                                </div>
+
+                                <!-- Steps & CFG -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="flex justify-between items-center mb-1">
+                                            <label class="text-xs font-semibold text-zinc-400">Steps</label>
+                                            <span id="steps-val" class="text-xs font-mono text-zinc-400">20</span>
+                                        </div>
+                                        <input type="range" id="steps-slider" min="1" max="100" value="20" oninput="document.getElementById('steps-val').innerText = this.value" class="w-full accent-brand-500">
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between items-center mb-1">
+                                            <label class="text-xs font-semibold text-zinc-400">CFG Scale</label>
+                                            <span id="cfg-val" class="text-xs font-mono text-zinc-400">7.5</span>
+                                        </div>
+                                        <input type="range" id="cfg-slider" min="1" max="20" step="0.5" value="7.5" oninput="document.getElementById('cfg-val').innerText = this.value" class="w-full accent-brand-500">
+                                    </div>
+                                </div>
+
+                                <!-- Dimensions & Presets -->
+                                <div>
+                                    <label class="block text-xs font-semibold text-zinc-400 mb-1.5">Resolution</label>
+                                    <div class="flex flex-wrap gap-2 mb-2">
+                                        <button type="button" onclick="setResolution(512, 512)" class="px-2 py-1 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-300">512×512</button>
+                                        <button type="button" onclick="setResolution(768, 768)" class="px-2 py-1 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-300">768×768</button>
+                                        <button type="button" onclick="setResolution(1024, 1024)" class="px-2 py-1 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-300">1024×1024</button>
+                                        <button type="button" onclick="setResolution(832, 1216)" class="px-2 py-1 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-300">832×1216 (Portrait)</button>
+                                        <button type="button" onclick="setResolution(1216, 832)" class="px-2 py-1 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded text-zinc-300">1216×832 (Landscape)</button>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <input type="number" id="width-input" value="512" step="64" min="64" max="4096" placeholder="Width" class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200">
+                                        <input type="number" id="height-input" value="512" step="64" min="64" max="4096" placeholder="Height" class="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200">
+                                    </div>
+                                </div>
+
+                                <!-- Sampler & Scheduler -->
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-zinc-400 mb-1">Sampler</label>
+                                        <select id="sampler-select" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200">
+                                            <option value="euler">euler</option>
+                                            <option value="euler_ancestral">euler_ancestral</option>
+                                            <option value="dpmpp_2m">dpmpp_2m</option>
+                                            <option value="dpmpp_sde">dpmpp_sde</option>
+                                            <option value="dpmpp_2m_sde">dpmpp_2m_sde</option>
+                                            <option value="heun">heun</option>
+                                            <option value="ddim">ddim</option>
+                                            <option value="uni_pc">uni_pc</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-zinc-400 mb-1">Scheduler</label>
+                                        <select id="scheduler-select" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200">
+                                            <option value="normal">normal</option>
+                                            <option value="karras">karras</option>
+                                            <option value="exponential">exponential</option>
+                                            <option value="sgm_uniform">sgm_uniform</option>
+                                            <option value="simple">simple</option>
+                                            <option value="ddim_uniform">ddim_uniform</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="pt-2 flex items-center space-x-3">
+                            <button id="btn-generate" type="button" onclick="handleGenerate()"
+                                class="flex-1 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg shadow-brand-500/25 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed group">
+                                <svg id="generate-icon" class="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                <span id="generate-text">Generate Image</span>
+                                <span class="text-xs px-1.5 py-0.5 rounded bg-white/20 text-white/90 hidden sm:inline-block">Ctrl+Enter</span>
+                            </button>
+                            <button id="btn-interrupt" type="button" onclick="handleInterrupt()"
+                                class="hidden bg-rose-600 hover:bg-rose-500 text-white font-medium py-3.5 px-5 rounded-xl transition-all shadow-lg shadow-rose-600/20 flex items-center space-x-1.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span>Cancel</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Generation Status & Live Preview Result -->
+                <div class="lg:col-span-6 space-y-5">
+                    <div class="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 shadow-xl flex flex-col h-full min-h-[480px]">
+                        
+                        <!-- Header / Status Bar -->
+                        <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-semibold text-zinc-200">Generation Preview</span>
+                                <span id="preview-status-pill" class="text-xs px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400">Idle</span>
+                            </div>
+                            <div id="gen-timer" class="text-xs font-mono text-zinc-500"></div>
+                        </div>
+
+                        <!-- Progress Bar Section (Visible during generation) -->
+                        <div id="progress-container" class="py-4 hidden space-y-2">
+                            <div class="flex justify-between items-center text-xs">
+                                <span id="progress-node-label" class="text-zinc-300 font-medium truncate max-w-[280px]">Connecting to queue...</span>
+                                <span id="progress-percentage" class="font-mono text-brand-400 font-semibold">0%</span>
+                            </div>
+                            <div class="w-full bg-zinc-950 rounded-full h-2.5 overflow-hidden border border-zinc-800">
+                                <div id="progress-bar" class="bg-gradient-to-r from-brand-600 to-violet-500 h-2.5 rounded-full transition-all duration-150 ease-out" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Image Display / Placeholder Container -->
+                        <div class="flex-1 flex items-center justify-center rounded-xl bg-zinc-950/70 border border-zinc-800/80 p-4 mt-2 relative overflow-hidden group">
+                            
+                            <!-- Placeholder when idle -->
+                            <div id="preview-placeholder" class="text-center p-8 text-zinc-600 space-y-3">
+                                <div class="w-16 h-16 mx-auto rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+                                    <svg class="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                </div>
+                                <p class="text-sm">Click "Generate Image" to start producing artwork</p>
+                                <p class="text-xs text-zinc-600">Generated images are saved directly to your mounted output folder</p>
+                            </div>
+
+                            <!-- Image Container -->
+                            <div id="preview-image-wrapper" class="hidden relative w-full h-full flex items-center justify-center">
+                                <img id="preview-img" src="" alt="Generated artwork" class="max-h-[500px] w-auto max-w-full object-contain rounded-lg shadow-2xl transition-all">
+                                
+                                <!-- Floating Quick Action Bar on Hover -->
+                                <div class="absolute bottom-3 inset-x-0 mx-auto w-max flex items-center space-x-2 bg-zinc-900/90 backdrop-blur border border-zinc-700/70 px-3 py-1.5 rounded-xl shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button type="button" id="btn-preview-modal" onclick="openCurrentInModal()" class="text-xs px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        View Details
+                                    </button>
+                                    <button type="button" id="btn-preview-download" onclick="downloadCurrentPreview()" class="text-xs px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg flex items-center gap-1.5">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Download
+                                    </button>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Footer Info -->
+                        <div id="preview-meta-footer" class="mt-4 pt-3 border-t border-zinc-800/80 text-xs text-zinc-400 flex items-center justify-between hidden">
+                            <span id="preview-seed-badge" class="font-mono bg-zinc-800/60 px-2 py-0.5 rounded text-zinc-300"></span>
+                            <span id="preview-filename-badge" class="truncate max-w-[240px] text-zinc-500"></span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 2: PERSISTENT GALLERY VIEW            -->
+        <!-- ========================================== -->
+        <section id="view-gallery" class="hidden space-y-6">
+            
+            <!-- Controls Bar -->
+            <div class="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                
+                <!-- Search & Filters -->
+                <div class="flex-1 flex flex-col sm:flex-row items-center gap-3">
+                    <div class="relative w-full sm:w-80">
+                        <svg class="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input type="text" id="gallery-search" placeholder="Search filenames..." oninput="debounceGallerySearch()"
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-500">
+                    </div>
+                    
+                    <div class="flex items-center space-x-2 w-full sm:w-auto">
+                        <label class="text-xs text-zinc-400 whitespace-nowrap">Sort:</label>
+                        <select id="gallery-sort" onchange="loadGallery(true)" class="bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-brand-500">
+                            <option value="newest">Newest First</option>
+                            <option value="oldest">Oldest First</option>
+                            <option value="name_asc">Filename (A-Z)</option>
+                            <option value="name_desc">Filename (Z-A)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Stats & Refresh -->
+                <div class="flex items-center justify-between md:justify-end space-x-3 text-xs text-zinc-400">
+                    <span id="gallery-stats-text">Loading images...</span>
+                    <button type="button" onclick="loadGallery(true)" title="Reload output directory"
+                        class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 rounded-xl transition-colors flex items-center gap-1.5 shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Gallery Grid Container -->
+            <div id="gallery-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                <!-- Dynamically populated thumbnail cards -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="gallery-empty" class="hidden text-center py-20 bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-8 space-y-4">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-zinc-800/60 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-zinc-300">No Images Found in Output Directory</h3>
+                <p class="text-xs text-zinc-500 max-w-sm mx-auto">Generate images using the Generator tab or place image files inside your ComfyUI output directory.</p>
+            </div>
+
+            <!-- Pagination / Load More -->
+            <div id="gallery-load-more-container" class="hidden text-center pt-4">
+                <button type="button" onclick="loadMoreGallery()" id="btn-load-more"
+                    class="px-6 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 rounded-xl text-sm font-medium transition-colors shadow-sm">
+                    Load More Images
+                </button>
+            </div>
+
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 3: WORKFLOW JSON EDITOR               -->
+        <!-- ========================================== -->
+        <section id="view-workflow" class="hidden space-y-6">
+            <div class="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between pb-4 border-b border-zinc-800">
+                    <div>
+                        <h2 class="text-lg font-bold text-zinc-100">ComfyUI API Workflow Template</h2>
+                        <p class="text-xs text-zinc-400">This JSON is injected with your prompt parameters and sent to ComfyUI's <code>/prompt</code> endpoint.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" onclick="resetWorkflowTemplate()"
+                            class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 rounded-lg text-xs font-medium transition-colors">
+                            Reset to Default
+                        </button>
+                        <button type="button" onclick="saveWorkflowTemplate()"
+                            class="px-4 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold shadow transition-colors">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <textarea id="workflow-editor" rows="22" spellcheck="false"
+                        class="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 font-mono text-xs text-emerald-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all"></textarea>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- ========================================== -->
+    <!-- IMAGE DETAIL & METADATA MODAL              -->
+    <!-- ========================================== -->
+    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md">
+        <div class="glass-modal max-w-6xl w-full h-[90vh] max-h-[850px] rounded-2xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative">
+            
+            <!-- Close Modal Button -->
+            <button onclick="closeImageModal()" class="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white flex items-center justify-center border border-zinc-700/60 transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            <!-- Left / Center: Full Size Image Viewer -->
+            <div class="flex-1 bg-zinc-950 flex items-center justify-center p-4 overflow-hidden relative group">
+                <img id="modal-img" src="" alt="Full preview" class="max-h-full max-w-full object-contain rounded-lg shadow-2xl transition-transform duration-200">
+                <div class="absolute bottom-3 left-3 bg-zinc-900/80 backdrop-blur px-2.5 py-1 rounded-md text-[11px] font-mono text-zinc-400 border border-zinc-800">
+                    <span id="modal-img-dim"></span>
+                </div>
+            </div>
+
+            <!-- Right Sidebar: Metadata & Actions -->
+            <div class="w-full md:w-96 bg-zinc-900 border-t md:border-t-0 md:border-l border-zinc-800 flex flex-col h-full overflow-hidden">
+                
+                <!-- Sidebar Header -->
+                <div class="p-4 border-b border-zinc-800">
+                    <h3 id="modal-filename" class="text-sm font-bold text-zinc-100 truncate">Image Details</h3>
+                    <p id="modal-date" class="text-xs text-zinc-500 mt-0.5"></p>
+                </div>
+
+                <!-- Scrollable Metadata Section -->
+                <div class="flex-1 p-4 overflow-y-auto space-y-4 text-xs">
+                    
+                    <!-- Formatted Positive Prompt -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-semibold text-zinc-300 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                Positive Prompt
+                            </span>
+                            <button onclick="copyModalPositive()" class="text-[11px] text-brand-400 hover:text-brand-300">Copy</button>
+                        </div>
+                        <div id="modal-pos-prompt" class="bg-zinc-950 border border-zinc-800/80 rounded-lg p-2.5 text-zinc-300 select-text max-h-36 overflow-y-auto font-sans leading-relaxed whitespace-pre-wrap">
+                            None embedded
+                        </div>
+                    </div>
+
+                    <!-- Formatted Negative Prompt -->
+                    <div id="modal-neg-container">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-semibold text-zinc-300 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+                                Negative Prompt
+                            </span>
+                            <button onclick="copyModalNegative()" class="text-[11px] text-brand-400 hover:text-brand-300">Copy</button>
+                        </div>
+                        <div id="modal-neg-prompt" class="bg-zinc-950 border border-zinc-800/80 rounded-lg p-2.5 text-zinc-400 select-text max-h-24 overflow-y-auto font-sans leading-relaxed whitespace-pre-wrap">
+                            None embedded
+                        </div>
+                    </div>
+
+                    <!-- Key Generation Parameters Grid -->
+                    <div>
+                        <span class="font-semibold text-zinc-300 block mb-1.5">Parameters</span>
+                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                            <div class="bg-zinc-950 p-2 rounded border border-zinc-800">
+                                <span class="text-zinc-500 block">Seed</span>
+                                <span id="modal-seed" class="font-mono text-zinc-200 select-text">-</span>
+                            </div>
+                            <div class="bg-zinc-950 p-2 rounded border border-zinc-800">
+                                <span class="text-zinc-500 block">Steps</span>
+                                <span id="modal-steps" class="font-mono text-zinc-200">-</span>
+                            </div>
+                            <div class="bg-zinc-950 p-2 rounded border border-zinc-800">
+                                <span class="text-zinc-500 block">CFG Scale</span>
+                                <span id="modal-cfg" class="font-mono text-zinc-200">-</span>
+                            </div>
+                            <div class="bg-zinc-950 p-2 rounded border border-zinc-800">
+                                <span class="text-zinc-500 block">Sampler</span>
+                                <span id="modal-sampler" class="text-zinc-200 truncate block">-</span>
+                            </div>
+                            <div class="bg-zinc-950 p-2 rounded border border-zinc-800 col-span-2">
+                                <span class="text-zinc-500 block">Model</span>
+                                <span id="modal-model" class="text-zinc-200 truncate block font-mono">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Raw Metadata -->
+                    <div class="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950/60">
+                        <button type="button" onclick="toggleModalRawJson()" class="w-full px-3 py-2 flex items-center justify-between text-left text-[11px] font-medium text-zinc-400 hover:text-zinc-200">
+                            <span>Raw Metadata / JSON</span>
+                            <span id="raw-toggle-arrow">▼</span>
+                        </button>
+                        <div id="modal-raw-container" class="hidden p-2.5 border-t border-zinc-800 space-y-2">
+                            <pre id="modal-raw-json" class="max-h-40 overflow-y-auto text-[10px] font-mono text-zinc-400 select-text bg-zinc-950 p-2 rounded"></pre>
+                            <button onclick="copyModalRawJson()" class="w-full text-center py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[11px]">Copy JSON</button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="p-4 border-t border-zinc-800 bg-zinc-950/40 space-y-2">
+                    <div class="flex space-x-2">
+                        <button type="button" onclick="loadModalPromptIntoGenerator()"
+                            class="flex-1 bg-brand-600 hover:bg-brand-500 text-white font-medium py-2 px-3 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span>Use in Generator</span>
+                        </button>
+                        <a id="modal-download-link" href="#" download=""
+                            class="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 py-2 px-3 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                        </a>
+                    </div>
+                    
+                    <!-- Permanent Delete Button -->
+                    <button type="button" onclick="confirmDeleteModalImage()"
+                        class="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 py-2 px-3 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>Delete Permanently</span>
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- TOAST NOTIFICATIONS CONTAINER              -->
+    <!-- ========================================== -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- Main JavaScript Logic -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

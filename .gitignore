@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment configuration
+.env
+
+# Dynamic data and image mounts
+output/*
+!output/.gitkeep
+
+appdata/*
+!appdata/.gitkeep
+!appdata/workflow_api.json
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
