@@ -14,6 +14,7 @@ const state = {
     // Workflows
     availableWorkflows: [],
     activeWorkflowId: 'default',
+    activeWorkflowParams: null,
 
     // Gallery
     galleryImages: [],
@@ -181,8 +182,157 @@ function handleWorkflowDrop(e) {
 }
 
 // ==========================================
-// WORKFLOW MANAGEMENT (SERVER & LOCAL)
+// WORKFLOW PARAMETER SYNC & MANAGEMENT
 // ==========================================
+function applyWorkflowParamsToForm(params, sourceName = '') {
+    if (!params || typeof params !== 'object') return;
+    state.activeWorkflowParams = params;
+
+    const updated = [];
+
+    // 1. Checkpoint Model
+    if (params.model) {
+        const ckptSelect = document.getElementById('ckpt-select');
+        if (ckptSelect) {
+            let found = false;
+            for (let i = 0; i < ckptSelect.options.length; i++) {
+                if (ckptSelect.options[i].value === params.model) {
+                    ckptSelect.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                const opt = document.createElement('option');
+                opt.value = params.model;
+                opt.textContent = `⭐ ${params.model} (From Workflow)`;
+                opt.selected = true;
+                ckptSelect.appendChild(opt);
+            }
+            updated.push(`Model: ${params.model}`);
+        }
+    }
+
+    // 2. Steps
+    if (params.steps !== undefined && params.steps !== null) {
+        const stepsSlider = document.getElementById('steps-slider');
+        const stepsVal = document.getElementById('steps-val');
+        if (stepsSlider) stepsSlider.value = params.steps;
+        if (stepsVal) stepsVal.innerText = params.steps;
+        updated.push(`Steps: ${params.steps}`);
+    }
+
+    // 3. CFG Scale
+    if (params.cfg !== undefined && params.cfg !== null) {
+        const cfgSlider = document.getElementById('cfg-slider');
+        const cfgVal = document.getElementById('cfg-val');
+        if (cfgSlider) cfgSlider.value = params.cfg;
+        if (cfgVal) cfgVal.innerText = params.cfg;
+        updated.push(`CFG: ${params.cfg}`);
+    }
+
+    // 4. Canvas Resolution (Width & Height)
+    if (params.width && params.height) {
+        setResolution(params.width, params.height);
+        updated.push(`Size: ${params.width}×${params.height}`);
+    } else {
+        if (params.width) {
+            const wInput = document.getElementById('width-input');
+            if (wInput) wInput.value = params.width;
+        }
+        if (params.height) {
+            const hInput = document.getElementById('height-input');
+            if (hInput) hInput.value = params.height;
+        }
+    }
+
+    // 5. Sampler
+    if (params.sampler_name) {
+        const samplerSelect = document.getElementById('sampler-select');
+        if (samplerSelect) {
+            let found = false;
+            for (let i = 0; i < samplerSelect.options.length; i++) {
+                if (samplerSelect.options[i].value.toLowerCase() === params.sampler_name.toLowerCase()) {
+                    samplerSelect.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                const opt = document.createElement('option');
+                opt.value = params.sampler_name;
+                opt.textContent = params.sampler_name;
+                opt.selected = true;
+                samplerSelect.appendChild(opt);
+            }
+            updated.push(`Sampler: ${params.sampler_name}`);
+        }
+    }
+
+    // 6. Scheduler
+    if (params.scheduler) {
+        const schedSelect = document.getElementById('scheduler-select');
+        if (schedSelect) {
+            let found = false;
+            for (let i = 0; i < schedSelect.options.length; i++) {
+                if (schedSelect.options[i].value.toLowerCase() === params.scheduler.toLowerCase()) {
+                    schedSelect.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                const opt = document.createElement('option');
+                opt.value = params.scheduler;
+                opt.textContent = params.scheduler;
+                opt.selected = true;
+                schedSelect.appendChild(opt);
+            }
+            updated.push(`Scheduler: ${params.scheduler}`);
+        }
+    }
+
+    // 7. Seed
+    if (params.seed !== undefined && params.seed !== null && params.seed > 0) {
+        const seedInput = document.getElementById('seed-input');
+        if (seedInput) seedInput.value = params.seed;
+    }
+
+    // 8. Positive & Negative Prompts (populate if empty)
+    const posInput = document.getElementById('positive-prompt');
+    if (posInput && params.positive_prompt && !posInput.value.trim()) {
+        posInput.value = params.positive_prompt;
+    }
+    const negInput = document.getElementById('negative-prompt');
+    if (negInput && params.negative_prompt && !negInput.value.trim()) {
+        negInput.value = params.negative_prompt;
+    }
+
+    if (sourceName && updated.length > 0) {
+        showToast(`🎛️ Synced tuning from "${sourceName}"!`, 'info');
+    }
+}
+
+async function loadActiveWorkflowTemplate() {
+    try {
+        const res = await fetch('/api/workflow');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.parsed_params) {
+            applyWorkflowParamsToForm(data.parsed_params);
+        }
+        if (data.active_id) {
+            state.activeWorkflowId = data.active_id;
+            const s1 = document.getElementById('active-workflow-select');
+            const s2 = document.getElementById('editor-workflow-select');
+            if (s1) s1.value = data.active_id;
+            if (s2) s2.value = data.active_id;
+        }
+    } catch (e) {
+        console.warn('Failed to load active workflow template on startup:', e);
+    }
+}
+
 async function loadAvailableWorkflows() {
     try {
         const res = await fetch('/api/comfy/workflows');
@@ -228,6 +378,10 @@ async function loadAvailableWorkflows() {
             const currentWf = workflows.find(w => w.id === state.activeWorkflowId);
             activePill.innerText = currentWf ? currentWf.name : 'Active';
         }
+
+        // Also sync the active workflow template and its tuning parameters to the Generator
+        await loadActiveWorkflowTemplate();
+
     } catch (e) {
         console.warn('Failed to load available workflows:', e);
     }
@@ -262,7 +416,12 @@ async function switchActiveWorkflow(workflowId) {
             activePill.innerText = currentWf.name;
         }
 
-        showToast(`Activated workflow: ${currentWf ? currentWf.name : workflowId}`, 'success');
+        // Apply workflow parameters directly to generator controls (Anime Tuning)
+        if (data.parsed_params) {
+            applyWorkflowParamsToForm(data.parsed_params, currentWf ? currentWf.name : workflowId);
+        }
+
+        showToast(`Activated workflow: ${currentWf ? currentWf.name : workflowId} ✨`, 'success');
     } catch (e) {
         showToast(`Failed to switch workflow: ${e.message}`, 'error');
     }
@@ -353,6 +512,25 @@ async function loadModels() {
                 opt.textContent = m;
                 select.appendChild(opt);
             });
+        }
+        // If an active workflow specified a model, ensure it's selected
+        if (state.activeWorkflowParams && state.activeWorkflowParams.model) {
+            const targetModel = state.activeWorkflowParams.model;
+            let found = false;
+            for (let i = 0; i < select.options.length; i++) {
+                if (select.options[i].value === targetModel) {
+                    select.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                const opt = document.createElement('option');
+                opt.value = targetModel;
+                opt.textContent = `⭐ ${targetModel} (From Workflow)`;
+                opt.selected = true;
+                select.appendChild(opt);
+            }
         }
     } catch (e) {
         console.warn('Could not load models list:', e);
@@ -1686,7 +1864,11 @@ async function saveWorkflowTemplate() {
             body: JSON.stringify({ workflow: parsed })
         });
         if (res.ok) {
-            showToast('Applied workflow template to Generator', 'success');
+            const data = await res.json();
+            if (data.parsed_params) {
+                applyWorkflowParamsToForm(data.parsed_params, 'Editor Workflow');
+            }
+            showToast('Applied workflow template to Generator ✨', 'success');
         } else {
             throw new Error('Failed to save');
         }
@@ -1699,8 +1881,11 @@ async function resetWorkflowTemplate() {
     try {
         const res = await fetch('/api/workflow/reset', { method: 'POST' });
         const data = await res.json();
+        if (data.parsed_params) {
+            applyWorkflowParamsToForm(data.parsed_params, 'Default Workflow');
+        }
         document.getElementById('workflow-editor').value = JSON.stringify(data.workflow, null, 2);
-        showToast('Reset to default workflow', 'info');
+        showToast('Reset to default workflow ↺', 'info');
         await loadAvailableWorkflows();
     } catch (e) {
         showToast('Failed to reset workflow', 'error');

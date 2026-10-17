@@ -65,11 +65,92 @@ def parse_a1111_parameters(text: str) -> Dict[str, Any]:
 
 
 def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract standard parameters from ComfyUI API prompt JSON graph."""
+    """Extract standard parameters from ComfyUI API prompt JSON graph or UI workflow format."""
     params: Dict[str, Any] = {}
     if not isinstance(prompt_graph, dict):
         return params
 
+    # Unwrap extra.prompt or prompt if nested
+    if "extra" in prompt_graph and isinstance(prompt_graph["extra"], dict) and "prompt" in prompt_graph["extra"]:
+        return parse_comfyui_prompt_graph(prompt_graph["extra"]["prompt"])
+    if "prompt" in prompt_graph and isinstance(prompt_graph["prompt"], dict):
+        return parse_comfyui_prompt_graph(prompt_graph["prompt"])
+
+    # Handle ComfyUI UI workflow format: {"nodes": [...], "links": [...]}
+    if "nodes" in prompt_graph and isinstance(prompt_graph["nodes"], list):
+        for node in prompt_graph["nodes"]:
+            if not isinstance(node, dict):
+                continue
+            ntype = str(node.get("type", ""))
+            widgets = node.get("widgets_values", [])
+
+            # KSampler node
+            if "KSampler" in ntype:
+                if isinstance(widgets, list) and len(widgets) >= 5:
+                    # Typical ComfyUI KSampler widgets: [seed, control, steps, cfg, sampler_name, scheduler, denoise]
+                    try:
+                        if "seed" not in params:
+                            params["seed"] = widgets[0]
+                        if len(widgets) >= 3:
+                            params["steps"] = int(widgets[2])
+                        if len(widgets) >= 4:
+                            params["cfg"] = float(widgets[3])
+                        if len(widgets) >= 5:
+                            params["sampler_name"] = str(widgets[4])
+                        if len(widgets) >= 6:
+                            params["scheduler"] = str(widgets[5])
+                    except (ValueError, IndexError):
+                        pass
+                elif isinstance(widgets, dict):
+                    if "steps" in widgets: params["steps"] = int(widgets["steps"])
+                    if "cfg" in widgets: params["cfg"] = float(widgets["cfg"])
+                    if "sampler_name" in widgets: params["sampler_name"] = str(widgets["sampler_name"])
+                    if "scheduler" in widgets: params["scheduler"] = str(widgets["scheduler"])
+                    if "seed" in widgets: params["seed"] = widgets["seed"]
+
+            # Checkpoint Loader
+            elif "CheckpointLoader" in ntype or "Loader" in ntype:
+                if isinstance(widgets, list) and len(widgets) > 0 and isinstance(widgets[0], str):
+                    params["model"] = str(widgets[0])
+                elif isinstance(widgets, dict) and "ckpt_name" in widgets:
+                    params["model"] = str(widgets["ckpt_name"])
+
+            # Empty Latent Image
+            elif "EmptyLatentImage" in ntype or ("Latent" in ntype and isinstance(widgets, list) and len(widgets) >= 2):
+                if isinstance(widgets, list) and len(widgets) >= 2:
+                    try:
+                        params["width"] = int(widgets[0])
+                        params["height"] = int(widgets[1])
+                        params["generation_resolution"] = f"{params['width']}x{params['height']}"
+                    except (ValueError, IndexError):
+                        pass
+                elif isinstance(widgets, dict) and "width" in widgets and "height" in widgets:
+                    params["width"] = int(widgets["width"])
+                    params["height"] = int(widgets["height"])
+                    params["generation_resolution"] = f"{params['width']}x{params['height']}"
+
+            # CLIP Text Encode
+            elif "CLIPTextEncode" in ntype:
+                title = str(node.get("title", "")).lower()
+                text = ""
+                if isinstance(widgets, list) and len(widgets) > 0 and isinstance(widgets[0], str):
+                    text = str(widgets[0]).strip()
+                elif isinstance(widgets, dict) and "text" in widgets:
+                    text = str(widgets["text"]).strip()
+
+                if text:
+                    if "positive_prompt" not in params and ("pos" in title or "positive" in title):
+                        params["positive_prompt"] = text
+                    elif "negative_prompt" not in params and ("neg" in title or "negative" in title):
+                        params["negative_prompt"] = text
+                    elif "positive_prompt" not in params:
+                        params["positive_prompt"] = text
+                    elif "negative_prompt" not in params:
+                        params["negative_prompt"] = text
+
+        return params
+
+    # Handle standard ComfyUI API graph format: {"1": {"class_type": "...", "inputs": {...}}, ...}
     ksampler_node = None
     checkpoint_node = None
     latent_node = None
@@ -80,11 +161,12 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(node, dict):
             continue
         class_type = node.get("class_type", "")
+        inputs = node.get("inputs", {})
         if "KSampler" in class_type:
             ksampler_node = node
-        elif "CheckpointLoader" in class_type:
+        elif "CheckpointLoader" in class_type or ("ckpt_name" in inputs and "Loader" in class_type):
             checkpoint_node = node
-        elif "EmptyLatentImage" in class_type:
+        elif "EmptyLatentImage" in class_type or ("width" in inputs and "height" in inputs and "Latent" in class_type):
             latent_node = node
         elif class_type == "CLIPTextEncode":
             clip_nodes.append((node_id, node))
@@ -98,13 +180,19 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
             params["seed"] = inputs["noise_seed"]
 
         if "steps" in inputs:
-            params["steps"] = inputs["steps"]
+            try:
+                params["steps"] = int(inputs["steps"])
+            except (ValueError, TypeError):
+                params["steps"] = inputs["steps"]
         if "cfg" in inputs:
-            params["cfg"] = inputs["cfg"]
+            try:
+                params["cfg"] = float(inputs["cfg"])
+            except (ValueError, TypeError):
+                params["cfg"] = inputs["cfg"]
         if "sampler_name" in inputs:
-            params["sampler_name"] = inputs["sampler_name"]
+            params["sampler_name"] = str(inputs["sampler_name"])
         if "scheduler" in inputs:
-            params["scheduler"] = inputs["scheduler"]
+            params["scheduler"] = str(inputs["scheduler"])
         if "denoise" in inputs:
             params["denoise"] = inputs["denoise"]
 
@@ -144,7 +232,7 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
     if checkpoint_node:
         ckpt_name = checkpoint_node.get("inputs", {}).get("ckpt_name")
         if ckpt_name:
-            params["model"] = ckpt_name
+            params["model"] = str(ckpt_name)
 
     # Resolution
     if latent_node:
@@ -152,9 +240,12 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
         width = inputs.get("width")
         height = inputs.get("height")
         if width and height:
-            params["generation_resolution"] = f"{width}x{height}"
-            params["width"] = width
-            params["height"] = height
+            try:
+                params["width"] = int(width)
+                params["height"] = int(height)
+                params["generation_resolution"] = f"{params['width']}x{params['height']}"
+            except (ValueError, TypeError):
+                pass
 
     return params
 

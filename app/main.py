@@ -22,6 +22,7 @@ from app.config import (
 )
 from app.comfy_service import comfy_service
 from app.gallery_service import gallery_service
+from app.metadata_parser import parse_comfyui_prompt_graph
 from app.tag_service import tag_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -211,21 +212,24 @@ async def get_workflow():
     """Get active ComfyUI API workflow JSON template and ID."""
     wf = comfy_service.load_workflow_template()
     active_id = comfy_service.get_active_workflow_id()
-    return {"workflow": wf, "active_id": active_id}
+    parsed_params = parse_comfyui_prompt_graph(wf)
+    return {"workflow": wf, "active_id": active_id, "parsed_params": parsed_params}
 
 
 @app.post("/api/workflow")
 async def update_workflow(req: WorkflowUpdateRequest):
     """Save an updated workflow template."""
     comfy_service.save_workflow_template(req.workflow)
-    return {"status": "saved"}
+    parsed_params = parse_comfyui_prompt_graph(req.workflow)
+    return {"status": "saved", "workflow": req.workflow, "parsed_params": parsed_params}
 
 
 @app.post("/api/workflow/reset")
 async def reset_workflow():
     """Reset workflow template to default."""
     wf = comfy_service.reset_workflow_template()
-    return {"status": "reset", "workflow": wf}
+    parsed_params = parse_comfyui_prompt_graph(wf)
+    return {"status": "reset", "workflow": wf, "parsed_params": parsed_params}
 
 
 @app.get("/api/comfy/workflows")
@@ -239,7 +243,8 @@ async def get_comfy_workflow(workflow_id: str):
     """Retrieve workflow JSON by id (default, local:<filename>, server:<filename>)."""
     try:
         wf = await comfy_service.fetch_workflow_by_id(workflow_id)
-        return {"id": workflow_id, "workflow": wf}
+        parsed_params = parse_comfyui_prompt_graph(wf)
+        return {"id": workflow_id, "workflow": wf, "parsed_params": parsed_params}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Workflow not found")
     except Exception as e:
@@ -253,7 +258,13 @@ async def activate_comfy_workflow(req: WorkflowActivateRequest):
         wf = await comfy_service.fetch_workflow_by_id(req.workflow_id)
         comfy_service.save_workflow_template(wf)
         comfy_service.set_active_workflow_id(req.workflow_id)
-        return {"status": "activated", "workflow_id": req.workflow_id, "workflow": wf}
+        parsed_params = parse_comfyui_prompt_graph(wf)
+        return {
+            "status": "activated",
+            "workflow_id": req.workflow_id,
+            "workflow": wf,
+            "parsed_params": parsed_params,
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -275,11 +286,13 @@ async def upload_workflow(file: UploadFile = File(...)):
         res = comfy_service.import_workflow_file(file.filename or "uploaded_workflow.json", content_bytes)
         # Fetch updated workflow list
         all_workflows = await comfy_service.list_available_workflows()
+        parsed_params = parse_comfyui_prompt_graph(res.get("workflow", {}))
         return {
             "status": "success",
             "message": f"Workflow '{res['name']}' imported successfully!",
             "imported": res,
             "workflows": all_workflows,
+            "parsed_params": parsed_params,
         }
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
