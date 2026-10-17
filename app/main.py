@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.config import (
     COMFYUI_URL,
     DATA_DIR,
+    DEFAULT_NEGATIVE_PROMPT,
     HOST,
     OUTPUT_DIR,
     PORT,
@@ -21,6 +22,7 @@ from app.config import (
 )
 from app.comfy_service import comfy_service
 from app.gallery_service import gallery_service
+from app.tag_service import tag_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("app")
@@ -107,6 +109,9 @@ async def lifespan(app: FastAPI):
     # Crawl output directory on startup
     await gallery_service.scan()
 
+    # Preload Danbooru tags asynchronously
+    asyncio.create_task(asyncio.to_thread(tag_service.load_tags))
+
     # Start directory watcher in background
     watcher_task = asyncio.create_task(gallery_service.start_watcher())
 
@@ -146,16 +151,42 @@ async def get_index():
     return HTMLResponse("<h3>ComfyUI Web UI loading...</h3>")
 
 
+@app.get("/api/config")
+async def get_config():
+    """Get system and UI configuration defaults."""
+    return {
+        "default_negative_prompt": DEFAULT_NEGATIVE_PROMPT,
+        "comfyui_url": COMFYUI_URL,
+    }
+
+
 @app.get("/api/status")
 async def get_status():
-    """Get status of ComfyUI backend and gallery directory stats."""
+    """Get status of ComfyUI backend, defaults, and gallery directory stats."""
     comfy_health = await comfy_service.check_health()
     gallery_info = gallery_service.list_images(limit=1)
     return {
         "comfyui": comfy_health,
         "output_dir": str(OUTPUT_DIR),
         "total_images": gallery_info["total"],
+        "default_negative_prompt": DEFAULT_NEGATIVE_PROMPT,
     }
+
+
+@app.get("/api/tags")
+async def search_tags(
+    q: str = Query("", description="Danbooru tag search query"),
+    category: Optional[int] = Query(None, description="Tag category filter: 0=general, 1=artist, 3=copyright, 4=character, 5=meta"),
+    limit: int = Query(25, ge=1, le=100),
+):
+    """Search Danbooru tags with ranking and alias matching."""
+    return tag_service.search(query=q, category=category, limit=limit)
+
+
+@app.get("/api/tags/top")
+async def get_top_tags(limit: int = Query(1500, ge=1, le=5000)):
+    """Return top most frequent Danbooru tags for browser preloading and instant autocomplete."""
+    return tag_service.get_top_tags(limit=limit)
 
 
 @app.get("/api/models")
@@ -165,11 +196,22 @@ async def get_models():
     return {"models": models}
 
 
+class WorkflowActivateRequest(BaseModel):
+    workflow_id: str
+
+
+class WorkflowSaveRequest(BaseModel):
+    filename: str
+    workflow: Dict[str, Any]
+    destination: str = Field("local", description="'local' or 'server'")
+
+
 @app.get("/api/workflow")
 async def get_workflow():
-    """Get active ComfyUI API workflow JSON template."""
+    """Get active ComfyUI API workflow JSON template and ID."""
     wf = comfy_service.load_workflow_template()
-    return {"workflow": wf}
+    active_id = comfy_service.get_active_workflow_id()
+    return {"workflow": wf, "active_id": active_id}
 
 
 @app.post("/api/workflow")
@@ -184,6 +226,45 @@ async def reset_workflow():
     """Reset workflow template to default."""
     wf = comfy_service.reset_workflow_template()
     return {"status": "reset", "workflow": wf}
+
+
+@app.get("/api/comfy/workflows")
+async def list_comfy_workflows():
+    """List workflows available on ComfyUI server, local storage, and default template."""
+    return await comfy_service.list_available_workflows()
+
+
+@app.get("/api/comfy/workflows/{workflow_id:path}")
+async def get_comfy_workflow(workflow_id: str):
+    """Retrieve workflow JSON by id (default, local:<filename>, server:<filename>)."""
+    try:
+        wf = await comfy_service.fetch_workflow_by_id(workflow_id)
+        return {"id": workflow_id, "workflow": wf}
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/comfy/workflows/activate")
+async def activate_comfy_workflow(req: WorkflowActivateRequest):
+    """Activate a specific workflow for generation and editing."""
+    try:
+        wf = await comfy_service.fetch_workflow_by_id(req.workflow_id)
+        comfy_service.save_workflow_template(wf)
+        comfy_service.set_active_workflow_id(req.workflow_id)
+        return {"status": "activated", "workflow_id": req.workflow_id, "workflow": wf}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/comfy/workflows/save")
+async def save_comfy_workflow(req: WorkflowSaveRequest):
+    """Save workflow to local storage or ComfyUI server."""
+    success = await comfy_service.save_workflow(req.filename, req.workflow, destination=req.destination)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to save workflow to destination")
+    return {"status": "saved", "filename": req.filename, "destination": req.destination}
 
 
 async def _run_generation_tracker(client_id: str, prompt_id: str, resolved_params: Dict[str, Any]):

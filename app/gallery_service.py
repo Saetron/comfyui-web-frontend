@@ -39,8 +39,16 @@ class GalleryService:
     def safe_resolve(self, relative_path: str) -> Optional[Path]:
         """Safely resolve a relative path inside OUTPUT_DIR, preventing path traversal."""
         try:
-            # Normalize path separators
-            rel = Path(relative_path.strip().lstrip("/\\"))
+            clean_str = relative_path.strip().replace("\\", "/")
+            out_str = self.output_dir.as_posix()
+
+            # If user or frontend provided absolute output path, strip the prefix
+            if clean_str.startswith(out_str):
+                clean_str = clean_str[len(out_str):]
+            elif clean_str.lstrip("/").startswith("app/output"):
+                clean_str = clean_str.lstrip("/")[len("app/output"):]
+
+            rel = Path(clean_str.strip("/\\"))
             target = (self.output_dir / rel).resolve()
             if target.is_relative_to(self.output_dir):
                 return target
@@ -161,6 +169,8 @@ class GalleryService:
                 except Exception:
                     pass
 
+            clean_rel = file_path.relative_to(self.output_dir).as_posix()
+
             # Permanently delete file from output dir
             file_path.unlink()
 
@@ -175,12 +185,13 @@ class GalleryService:
 
             # Update cache
             async with self._lock:
+                self._images_cache.pop(clean_rel, None)
                 self._images_cache.pop(relative_path, None)
 
             # Broadcast event to frontend
             await self.broadcast({
                 "type": "gallery_item_deleted",
-                "relative_path": relative_path,
+                "relative_path": clean_rel,
             })
             return True
         except Exception as e:

@@ -10,7 +10,13 @@ from urllib.parse import urlparse
 import httpx
 import websockets
 
-from app.config import COMFYUI_URL, DEFAULT_WORKFLOW_TEMPLATE, WORKFLOW_FILE
+from app.config import (
+    COMFYUI_URL,
+    DATA_DIR,
+    DEFAULT_WORKFLOW_TEMPLATE,
+    WORKFLOW_FILE,
+    WORKFLOWS_DIR,
+)
 
 logger = logging.getLogger("comfy_service")
 
@@ -59,7 +65,150 @@ class ComfyService:
         """Reset workflow to original default template."""
         if DEFAULT_WORKFLOW_TEMPLATE.exists():
             shutil.copy(DEFAULT_WORKFLOW_TEMPLATE, WORKFLOW_FILE)
+        self.set_active_workflow_id("default")
         return self.load_workflow_template()
+
+    def get_active_workflow_id(self) -> str:
+        """Get currently active workflow ID."""
+        id_file = DATA_DIR / "active_workflow_id.txt"
+        if id_file.exists():
+            try:
+                return id_file.read_text(encoding="utf-8").strip()
+            except Exception:
+                pass
+        return "default"
+
+    def set_active_workflow_id(self, workflow_id: str):
+        """Save active workflow ID."""
+        id_file = DATA_DIR / "active_workflow_id.txt"
+        try:
+            id_file.write_text(workflow_id, encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"Failed to write active workflow ID: {e}")
+
+    async def list_available_workflows(self) -> List[Dict[str, Any]]:
+        """List workflows from default template, ComfyUI server (/userdata?dir=workflows/), and local workflows dir."""
+        active_id = self.get_active_workflow_id()
+        workflows = [
+            {
+                "id": "default",
+                "name": "Default SD 1.5 Workflow",
+                "source": "default",
+                "filename": "default_workflow_api.json",
+                "is_active": active_id == "default",
+            }
+        ]
+
+        # 1. Check local WORKFLOWS_DIR
+        try:
+            if WORKFLOWS_DIR.exists():
+                for p in sorted(WORKFLOWS_DIR.glob("*.json")):
+                    wid = f"local:{p.name}"
+                    workflows.append({
+                        "id": wid,
+                        "name": p.stem.replace("_", " ").title(),
+                        "source": "local",
+                        "filename": p.name,
+                        "is_active": active_id == wid,
+                    })
+        except Exception as e:
+            logger.warning(f"Error reading local workflows: {e}")
+
+        # 2. Check ComfyUI server userdata endpoint
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                for url in [
+                    f"{self.comfy_url}/userdata?dir=workflows/",
+                    f"{self.comfy_url}/api/userdata?dir=workflows/",
+                    f"{self.comfy_url}/userdata",
+                ]:
+                    try:
+                        res = await client.get(url)
+                        if res.status_code == 200:
+                            data = res.json()
+                            items = data if isinstance(data, list) else data.get("files", [])
+                            for item in items:
+                                fname = item if isinstance(item, str) else item.get("name", "")
+                                if fname.endswith(".json"):
+                                    clean_name = fname.replace("workflows/", "").replace("\\", "/")
+                                    wid = f"server:{clean_name}"
+                                    workflows.append({
+                                        "id": wid,
+                                        "name": Path(clean_name).stem.replace("_", " ").title(),
+                                        "source": "server",
+                                        "filename": clean_name,
+                                        "is_active": active_id == wid,
+                                    })
+                            break
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.debug(f"Could not fetch server workflows: {e}")
+
+        return workflows
+
+    async def fetch_workflow_by_id(self, workflow_id: str) -> Dict[str, Any]:
+        """Fetch workflow JSON by id (default, local:<filename>, or server:<filename>)."""
+        if workflow_id == "default":
+            if DEFAULT_WORKFLOW_TEMPLATE.exists():
+                with open(DEFAULT_WORKFLOW_TEMPLATE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return {}
+
+        if workflow_id.startswith("local:"):
+            filename = workflow_id.replace("local:", "", 1)
+            target = WORKFLOWS_DIR / filename
+            if target.exists():
+                with open(target, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            raise FileNotFoundError(f"Local workflow not found: {filename}")
+
+        if workflow_id.startswith("server:"):
+            filename = workflow_id.replace("server:", "", 1)
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                for url in [
+                    f"{self.comfy_url}/userdata/workflows/{filename}",
+                    f"{self.comfy_url}/api/userdata/workflows/{filename}",
+                    f"{self.comfy_url}/userdata/{filename}",
+                ]:
+                    try:
+                        res = await client.get(url)
+                        if res.status_code == 200:
+                            data = res.json()
+                            if isinstance(data, dict):
+                                if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
+                                    return data["extra"]["prompt"]
+                                if "prompt" in data and isinstance(data["prompt"], dict):
+                                    return data["prompt"]
+                                return data
+                    except Exception:
+                        continue
+            raise FileNotFoundError(f"Server workflow not found: {filename}")
+
+        raise ValueError(f"Unknown workflow id: {workflow_id}")
+
+    async def save_workflow(self, filename: str, workflow_dict: Dict[str, Any], destination: str = "local") -> bool:
+        """Save workflow to local storage or ComfyUI server."""
+        clean_name = filename if filename.endswith(".json") else f"{filename}.json"
+        
+        # Always save locally in WORKFLOWS_DIR
+        target = WORKFLOWS_DIR / clean_name
+        with open(target, "w", encoding="utf-8") as f:
+            json.dump(workflow_dict, f, indent=2)
+
+        if destination == "server":
+            try:
+                async with httpx.AsyncClient(timeout=6.0) as client:
+                    res = await client.post(
+                        f"{self.comfy_url}/userdata/workflows/{clean_name}",
+                        json=workflow_dict
+                    )
+                    return res.status_code in (200, 201)
+            except Exception as e:
+                logger.error(f"Failed to post workflow to ComfyUI server: {e}")
+                return False
+
+        return True
 
     async def check_health(self) -> Dict[str, Any]:
         """Check ComfyUI server connectivity and stats."""

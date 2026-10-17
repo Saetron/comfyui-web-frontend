@@ -9,40 +9,45 @@ A lightweight, Dockerized web interface in Python (**FastAPI** + **vanilla HTML 
 
 ## Features
 
-### 1. 🎨 Generator View
-- **Template Workflow Injection**: Automatically loads standard ComfyUI API workflow JSON (`workflow_api.json`).
-- **Clean Form**:
-  - Positive Prompt (`textarea`)
-  - Negative Prompt (`textarea`)
-  - Seed input with **Randomize toggle** and **🎲 Roll button**
-  - Collapsible Advanced Controls (Checkpoint selector, Steps, CFG Scale, Resolution presets & custom sizes, Samplers, and Schedulers).
+### 1. 🎨 Generator View & Danbooru Tagging
+- **Danbooru Style Autocomplete**:
+  - Embedded **140,000+ tag dictionary** with live frequency counts and alias support.
+  - Autocomplete dropdown pops up as you type in positive or negative prompt textareas.
+  - **Category Color-Coded Badges**: General (blue), Character (green), Copyright (purple), Artist (red), Meta (amber).
+  - Keyboard navigation (`ArrowUp`/`ArrowDown`, `Enter`/`Tab` to accept, `Esc` to close).
+- **Tag Weighting Shortcuts**:
+  - Press `Ctrl+Up` / `Ctrl+Down` (or `Cmd+Up` / `Cmd+Down`) to adjust tag weight: `(tag:1.1)` ⇄ `(tag:1.2)`.
+- **Quick Tag Palettes & Format Tools**:
+  - One-click tag drawers for Quality, Subject, Style, Lighting, and Negative staples.
+  - Utilities: `space ➔ _`, `_ ➔ space`, and `🧹 Clean & Deduplicate`.
+- **Configurable Standard Negative Prompt**:
+  - Configure your favorite baseline negative prompt via the `DEFAULT_NEGATIVE_PROMPT` environment variable.
+- **Workflow Management**:
+  - Switch active workflow on the fly from a dropdown: Default baseline, workflows stored on your **ComfyUI Server** (`/userdata`), or local workflows in `appdata/workflows/`.
 - **Live Progress & WebSocket Tracking**:
-  - Connects to ComfyUI's WebSocket endpoint (`/ws?clientId=...`)
-  - Real-time progress bar (percentage & step count), active node reporting, queue status, and timer.
-  - Live result preview displayed immediately upon generation completion.
-  - Shortcut: Press `Ctrl+Enter` or `Cmd+Enter` to generate from anywhere in the form.
+  - Real-time percentage, step counter, active node status, and queue depth.
+  - Live result preview displayed immediately upon generation completion (`Ctrl+Enter` to generate).
 
-### 2. 🖼️ Persistent Gallery View
-- **Direct Volume Mount**: Directly mounts the ComfyUI host `output/` directory at `/app/output` with read/write access.
+### 2. 🖼️ Persistent Gallery, TikTok Mode & Detailed Viewer
 - **Filesystem-based (No in-memory ComfyUI history dependency)**:
   - Crawls `/app/output` recursively on startup.
-  - Watches for new, modified, or deleted files in real-time using `watchfiles` and pushes instant updates via WebSocket to all connected browser tabs.
-- **Responsive Grid**:
-  - Optimized thumbnails generated on the fly and cached.
-  - Search by filename or relative path.
-  - Sort by Newest First, Oldest First, or Filename.
-- **Embedded Metadata Inspection**:
-  - Reads embedded ComfyUI PNG `tEXt` / `iTXt` chunks (`prompt`, `workflow`) and A1111 / WebUI parameters.
-  - Displays human-readable parameters: Positive & Negative Prompts, Seed, Steps, CFG, Sampler, Model name, Dimensions, and File size.
-  - "Use in Generator" button: One-click to reload previous prompts and settings into the Generator.
-  - Copy buttons for prompts and raw JSON.
-- **Permanent Deletion**:
-  - Permanent "Delete" button inside the image modal with confirmation.
-  - Deletes the file and thumbnail directly from the mounted output volume and instantly updates the gallery view.
+  - Monitors changes in real-time with `watchfiles` and pushes instant updates via WebSocket.
+- **📱 TikTok Style Mode (Random)**:
+  - Fullscreen randomized vertical slideshow viewer.
+  - Navigate with mouse wheel, swipe, `Space`, or `ArrowDown` / `ArrowUp`.
+  - Glass caption overlay displaying prompt (with clickable tag pills), seed, model, and dimensions.
+  - Floating action sidebar: Next Random (🎲), Copy Prompt, Use in Generator, and Auto-Play toggle (5s timer).
+- **Detailed Image Modal**:
+  - High-resolution viewer with **`← Prev` and `Next →` navigation buttons** (and keyboard `ArrowLeft` / `ArrowRight` support).
+  - Embedded PNG generation metadata extraction (`prompt`, `workflow`, and A1111 parameters).
+  - Interactive clickable prompt tag pills.
+- **Internal Delete Confirmation**:
+  - In-app styled confirmation modal replacing native browser alerts.
+  - Permanently removes images and cached thumbnails from the mounted volume.
 
-### 3. ⚙️ Workflow JSON Editor
-- View, edit, and save custom ComfyUI API workflow JSON templates directly in the web UI.
-- Reset to the default template at any time.
+### 3. ⚙️ ComfyUI Server & Local Workflow Manager
+- Discover and load workflows directly from ComfyUI server user data (`/userdata?dir=workflows/`).
+- Save custom workflows locally (`appdata/workflows/`) or upload them directly to the ComfyUI server.
 
 ---
 
@@ -56,21 +61,25 @@ Comfy/
 ├── .dockerignore
 ├── .env.example
 ├── README.md
+├── AGENTS.md                    # Developer and architecture guide
 ├── output/                      # Mounted to ComfyUI's output directory (./output -> /app/output)
-├── appdata/                     # Persistent storage for custom workflow templates and thumbnails
+├── appdata/                     # Persistent storage for custom workflows, tags, and thumbnails
 └── app/
     ├── __init__.py
     ├── config.py                # Environment and path configurations
-    ├── comfy_service.py         # ComfyUI API client, workflow injector, and WebSocket listener
+    ├── comfy_service.py         # ComfyUI API client, workflow injector, server workflow manager
     ├── gallery_service.py       # Filesystem scanner, directory watcher, and thumbnail manager
     ├── metadata_parser.py       # ComfyUI PNG chunk & EXIF metadata parser
+    ├── tag_service.py           # Danbooru tag search engine with 140k dataset
     ├── main.py                  # FastAPI app, REST endpoints, and WebSocket connection manager
+    ├── data/
+    │   └── tags/danbooru.csv    # 140,000+ Danbooru tags dataset
     ├── templates/
     │   └── default_workflow_api.json # Baseline ComfyUI API workflow template
     └── static/
         ├── index.html           # Single-page interface styled with Tailwind CSS
-        ├── app.js               # Frontend controller & WebSocket client
-        └── style.css            # Custom scrollbars and styling
+        ├── app.js               # Frontend controller, tag autocomplete, TikTok mode & WebSocket client
+        └── style.css            # Custom styling, tag category badges, and animations
 ```
 
 ---
@@ -80,9 +89,6 @@ Comfy/
 ### 1. Ensure ComfyUI is Running
 Start your local ComfyUI instance (default port `8188`).
 
-> [!IMPORTANT]
-> If running ComfyUI on Windows/macOS/Linux, ensure ComfyUI listens on all interfaces if necessary (`--listen 0.0.0.0` or default `127.0.0.1`), or use `http://host.docker.internal:8188`.
-
 ### 2. Point to Your ComfyUI Output Folder
 In `docker-compose.yml`, mount your existing ComfyUI `output/` directory into `./output`:
 
@@ -91,7 +97,6 @@ volumes:
   - /path/to/your/comfyui/output:/app/output:rw
   - ./appdata:/app/data
 ```
-*(Or keep `./output:/app/output:rw` and point ComfyUI to save in this project's `output/` folder).*
 
 ### 3. Launch the Container
 Run:
@@ -109,34 +114,11 @@ http://localhost:8080
 
 ## Configuration & Environment Variables
 
-You can configure the frontend using environment variables or a `.env` file:
-
 | Variable | Default | Description |
 |---|---|---|
 | `COMFYUI_URL` | `http://host.docker.internal:8188` | Address of your ComfyUI backend instance |
+| `DEFAULT_NEGATIVE_PROMPT` | `worst quality, low quality, bad anatomy...` | Default baseline negative prompt text |
 | `PORT` | `8080` | Internal and exposed web server port |
 | `OUTPUT_DIR` | `/app/output` | Path to mounted ComfyUI output directory |
 | `DATA_DIR` | `/app/data` | Path to persistent storage for templates and thumbnails |
 | `HOST` | `0.0.0.0` | Bind host address |
-
-### Connecting across Operating Systems
-- **Windows / macOS (Docker Desktop)**: `http://host.docker.internal:8188` works out of the box.
-- **Linux**: The `docker-compose.yml` includes `extra_hosts: ["host.docker.internal:host-gateway"]`, allowing Linux Docker containers to resolve `host.docker.internal` to the host machine.
-- **Remote / LAN machine**: Set `COMFYUI_URL=http://192.168.1.100:8188` (replace with your server's LAN IP).
-
----
-
-## How It Works
-
-### Workflow Injection
-When you click **Generate**:
-1. The app loads the active template from `/app/data/workflow_api.json` (or `app/templates/default_workflow_api.json`).
-2. The injector traces the `KSampler` node to identify:
-   - Seed (`seed` or `noise_seed`)
-   - Positive prompt link (`inputs.positive` -> `CLIPTextEncode`)
-   - Negative prompt link (`inputs.negative` -> `CLIPTextEncode`)
-   - Dimensions (`EmptyLatentImage`)
-   - Checkpoint model (`CheckpointLoaderSimple`)
-3. The modified JSON payload is posted to ComfyUI's `/prompt` endpoint.
-4. The backend opens a WebSocket connection to ComfyUI, filters messages by the returned `prompt_id`, and relays real-time step and execution events to the browser.
-5. When the `SaveImage` node finishes, the generated image appears in the preview pane, and the directory watcher automatically indexes it into the Gallery.

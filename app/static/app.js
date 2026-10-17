@@ -1,6 +1,6 @@
 // ComfyUI Studio Frontend Application Logic
 
-// Global State
+// Global Application State
 const state = {
     clientId: getOrCreateClientId(),
     ws: null,
@@ -9,14 +9,52 @@ const state = {
     generationStartTime: null,
     generationTimerInterval: null,
     currentPreviewData: null,
+    defaultNegativePrompt: '',
+
+    // Workflows
+    availableWorkflows: [],
+    activeWorkflowId: 'default',
+
+    // Gallery
     galleryImages: [],
     galleryOffset: 0,
     galleryLimit: 48,
     galleryTotal: 0,
     galleryLoading: false,
     searchTimeout: null,
+    currentModalIndex: -1,
     currentModalImage: null,
-    comfyConnected: false,
+
+    // TikTok Mode (Random)
+    tiktokQueue: [],
+    tiktokIndex: 0,
+    currentTikTokImage: null,
+    tiktokAutoplayInterval: null,
+    tiktokAutoplayActive: false,
+
+    // Delete Modal State
+    imagePendingDelete: null,
+
+    // Danbooru Tag Autocomplete
+    topTags: [],
+    autocompleteTargetInput: null,
+    autocompleteActiveIndex: 0,
+    autocompleteItems: [],
+    autocompleteToken: '',
+    autocompleteTokenStart: 0,
+    autocompleteTokenEnd: 0,
+    autocompleteDebounceTimer: null,
+
+    // Tag Palettes Data
+    tagPalettes: {
+        quality: ['masterpiece', 'best quality', 'highly detailed', 'highres', 'absurdres', 'ultra-detailed', '8k wallpaper', 'sharp focus', 'intricate details'],
+        subject: ['1girl', '1boy', '2girls', 'solo', 'multiple girls', 'portrait', 'upper body', 'cowboy shot', 'full body', 'looking at viewer', 'smile', 'blush'],
+        style: ['anime screencap', 'official art', 'retro anime', 'illustration', 'watercolor', 'oil painting', 'chibi', 'lineart', 'monochrome'],
+        lighting: ['cinematic lighting', 'volumetric lighting', 'god rays', 'bloom', 'soft lighting', 'sunset', 'dusk', 'backlighting', 'dramatic shadow'],
+        negative: ['worst quality', 'low quality', 'bad anatomy', 'bad hands', 'missing fingers', 'extra digits', 'watermark', 'blurry', 'deformed', 'mutation', 'bad proportions']
+    },
+    activePalette: null,
+    lastFocusedPromptInput: 'positive-prompt',
 };
 
 // Utilities
@@ -58,21 +96,139 @@ function switchTab(tabId) {
         const btn = document.getElementById(`tab-${tab}`);
         if (tab === tabId) {
             view.classList.remove('hidden');
-            btn.className = 'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-zinc-800 shadow-sm';
+            btn.className = 'flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-zinc-800 shadow-sm';
         } else {
             view.classList.add('hidden');
-            btn.className = 'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50';
+            btn.className = 'flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50';
         }
     });
 
     if (tabId === 'gallery') {
-        loadGallery(true);
+        loadGallery(false);
     } else if (tabId === 'workflow') {
         loadWorkflowTemplate();
     }
 }
 
-// Check ComfyUI Status & Load Models
+// ==========================================
+// WORKFLOW MANAGEMENT (SERVER & LOCAL)
+// ==========================================
+async function loadAvailableWorkflows() {
+    try {
+        const res = await fetch('/api/comfy/workflows');
+        if (!res.ok) return;
+        const workflows = await res.json();
+        state.availableWorkflows = workflows;
+
+        const headerSelect = document.getElementById('active-workflow-select');
+        const editorSelect = document.getElementById('editor-workflow-select');
+        
+        [headerSelect, editorSelect].forEach(select => {
+            if (!select) return;
+            select.innerHTML = '';
+            
+            const defaultGroup = document.createElement('optgroup');
+            defaultGroup.label = 'Default Templates';
+            const serverGroup = document.createElement('optgroup');
+            serverGroup.label = 'ComfyUI Server Workflows';
+            const localGroup = document.createElement('optgroup');
+            localGroup.label = 'Local Workflows';
+
+            workflows.forEach(wf => {
+                const opt = document.createElement('option');
+                opt.value = wf.id;
+                opt.textContent = wf.name;
+                if (wf.is_active) {
+                    opt.selected = true;
+                    state.activeWorkflowId = wf.id;
+                }
+
+                if (wf.source === 'default') defaultGroup.appendChild(opt);
+                else if (wf.source === 'server') serverGroup.appendChild(opt);
+                else localGroup.appendChild(opt);
+            });
+
+            if (defaultGroup.children.length) select.appendChild(defaultGroup);
+            if (serverGroup.children.length) select.appendChild(serverGroup);
+            if (localGroup.children.length) select.appendChild(localGroup);
+        });
+
+        const activePill = document.getElementById('active-workflow-pill');
+        if (activePill) {
+            const currentWf = workflows.find(w => w.id === state.activeWorkflowId);
+            activePill.innerText = currentWf ? currentWf.name : 'Active';
+        }
+    } catch (e) {
+        console.warn('Failed to load available workflows:', e);
+    }
+}
+
+async function switchActiveWorkflow(workflowId) {
+    try {
+        const res = await fetch('/api/comfy/workflows/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workflow_id: workflowId })
+        });
+        if (!res.ok) throw new Error('Activation failed');
+        const data = await res.json();
+        state.activeWorkflowId = workflowId;
+
+        // Sync dropdowns
+        const s1 = document.getElementById('active-workflow-select');
+        const s2 = document.getElementById('editor-workflow-select');
+        if (s1) s1.value = workflowId;
+        if (s2) s2.value = workflowId;
+
+        // Update editor if in workflow view
+        const editor = document.getElementById('workflow-editor');
+        if (editor && data.workflow) {
+            editor.value = JSON.stringify(data.workflow, null, 2);
+        }
+
+        const activePill = document.getElementById('active-workflow-pill');
+        const currentWf = state.availableWorkflows.find(w => w.id === workflowId);
+        if (activePill && currentWf) {
+            activePill.innerText = currentWf.name;
+        }
+
+        showToast(`Activated workflow: ${currentWf ? currentWf.name : workflowId}`, 'success');
+    } catch (e) {
+        showToast(`Failed to switch workflow: ${e.message}`, 'error');
+    }
+}
+
+async function saveWorkflowToServerOrLocal(destination = 'local') {
+    const raw = document.getElementById('workflow-editor').value;
+    try {
+        const parsed = JSON.parse(raw);
+        const promptMsg = destination === 'server'
+            ? 'Enter filename to save on ComfyUI server (e.g. my_workflow.json):'
+            : 'Enter filename to save locally (e.g. custom_sdxl.json):';
+        const name = prompt(promptMsg, 'my_workflow.json');
+        if (!name || !name.trim()) return;
+
+        const res = await fetch('/api/comfy/workflows/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                filename: name.trim(),
+                workflow: parsed,
+                destination: destination
+            })
+        });
+
+        if (!res.ok) throw new Error('Save failed');
+        showToast(`Saved workflow to ${destination}: ${name}`, 'success');
+        await loadAvailableWorkflows();
+    } catch (e) {
+        showToast(`Error saving workflow: ${e.message}`, 'error');
+    }
+}
+
+// ==========================================
+// CONFIGURATION & STATUS
+// ==========================================
 async function checkComfyStatus() {
     try {
         const res = await fetch('/api/status');
@@ -81,13 +237,19 @@ async function checkComfyStatus() {
         const dot = document.getElementById('status-dot');
         const text = document.getElementById('status-text');
 
+        if (data.default_negative_prompt) {
+            state.defaultNegativePrompt = data.default_negative_prompt;
+            const negInput = document.getElementById('negative-prompt');
+            if (negInput && !negInput.value.trim()) {
+                negInput.value = state.defaultNegativePrompt;
+            }
+        }
+
         if (data.comfyui && data.comfyui.connected) {
-            state.comfyConnected = true;
             dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
             text.innerText = 'ComfyUI Online';
             badge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-950/60 border border-emerald-800/80 text-emerald-300';
         } else {
-            state.comfyConnected = false;
             dot.className = 'w-2 h-2 rounded-full bg-rose-500';
             text.innerText = 'ComfyUI Offline';
             badge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-rose-950/60 border border-rose-800/80 text-rose-300';
@@ -97,10 +259,15 @@ async function checkComfyStatus() {
             document.getElementById('gallery-count-badge').innerText = data.total_images;
         }
     } catch (e) {
-        state.comfyConnected = false;
         document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-rose-500';
         document.getElementById('status-text').innerText = 'Backend Offline';
     }
+}
+
+function resetToDefaultNegativePrompt() {
+    const neg = document.getElementById('negative-prompt');
+    neg.value = state.defaultNegativePrompt || 'worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, blurry, deformed';
+    showToast('Reset negative prompt to default', 'info');
 }
 
 async function loadModels() {
@@ -122,7 +289,375 @@ async function loadModels() {
     }
 }
 
-// WebSocket Management
+// ==========================================
+// DANBOORU TAG AUTOCOMPLETE & PALETTES
+// ==========================================
+async function preloadTopTags() {
+    try {
+        const res = await fetch('/api/tags/top?limit=1500');
+        if (res.ok) {
+            state.topTags = await res.json();
+        }
+    } catch (e) {
+        console.warn('Could not preload top tags:', e);
+    }
+}
+
+function initTagAutocomplete() {
+    const inputs = ['positive-prompt', 'negative-prompt'];
+    inputs.forEach(id => {
+        const elem = document.getElementById(id);
+        if (!elem) return;
+
+        elem.addEventListener('focus', () => {
+            state.lastFocusedPromptInput = id;
+        });
+
+        elem.addEventListener('input', (e) => {
+            state.lastFocusedPromptInput = id;
+            handlePromptInput(elem);
+        });
+
+        elem.addEventListener('keydown', (e) => {
+            handlePromptKeydown(elem, e);
+        });
+
+        elem.addEventListener('blur', () => {
+            // Slight delay so clicks on dropdown items register before hide
+            setTimeout(hideAutocomplete, 250);
+        });
+    });
+
+    // Close autocomplete on click outside
+    document.addEventListener('click', (e) => {
+        const dd = document.getElementById('tag-autocomplete');
+        if (!dd.contains(e.target) && !inputs.some(id => document.getElementById(id) === e.target)) {
+            hideAutocomplete();
+        }
+    });
+}
+
+function handlePromptInput(textarea) {
+    const cursor = textarea.selectionStart;
+    const text = textarea.value;
+
+    // Find the boundary of the comma-separated tag around cursor
+    const beforeCursor = text.substring(0, cursor);
+    const afterCursor = text.substring(cursor);
+
+    const lastCommaBefore = beforeCursor.lastIndexOf(',');
+    const nextCommaAfter = afterCursor.indexOf(',');
+
+    const tokenStart = lastCommaBefore === -1 ? 0 : lastCommaBefore + 1;
+    const tokenEnd = nextCommaAfter === -1 ? text.length : cursor + nextCommaAfter;
+
+    let rawToken = text.substring(tokenStart, cursor).trimStart();
+    // Clean weighting symbols from query (e.g. (1girl or {1girl
+    let cleanToken = rawToken.replace(/^[({[\s]+/, '').trim();
+
+    state.autocompleteToken = cleanToken;
+    state.autocompleteTokenStart = tokenStart;
+    state.autocompleteTokenEnd = tokenEnd;
+    state.autocompleteTargetInput = textarea;
+
+    if (cleanToken.length < 1) {
+        hideAutocomplete();
+        return;
+    }
+
+    // Debounce search
+    clearTimeout(state.autocompleteDebounceTimer);
+    state.autocompleteDebounceTimer = setTimeout(() => {
+        searchAndShowAutocomplete(cleanToken, textarea);
+    }, 80);
+}
+
+async function searchAndShowAutocomplete(query, textarea) {
+    const qLower = query.toLowerCase().replace(/[\s_]+/g, '_');
+    let matches = [];
+
+    // 1. Check preloaded top tags first
+    if (state.topTags.length > 0) {
+        matches = state.topTags.filter(t => 
+            t.name.startsWith(qLower) || 
+            t.name.replace(/_/g, ' ').startsWith(query.toLowerCase()) ||
+            t.name.includes(qLower)
+        ).slice(0, 15);
+    }
+
+    // 2. Fall back to backend search if few matches
+    if (matches.length < 5 && query.length >= 2) {
+        try {
+            const res = await fetch(`/api/tags?q=${encodeURIComponent(query)}&limit=20`);
+            if (res.ok) {
+                matches = await res.json();
+            }
+        } catch (e) {
+            console.warn('API tag search error:', e);
+        }
+    }
+
+    if (matches.length === 0) {
+        hideAutocomplete();
+        return;
+    }
+
+    state.autocompleteItems = matches;
+    state.autocompleteActiveIndex = 0;
+    renderAutocompleteDropdown(matches, textarea);
+}
+
+function renderAutocompleteDropdown(items, textarea) {
+    const dd = document.getElementById('tag-autocomplete');
+    dd.innerHTML = '';
+
+    const rect = textarea.getBoundingClientRect();
+    dd.style.top = `${rect.bottom + window.scrollY + 4}px`;
+    dd.style.left = `${rect.left + window.scrollX}px`;
+    dd.style.width = `${Math.min(rect.width, 420)}px`;
+
+    items.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = `tag-autocomplete-item ${idx === 0 ? 'active' : ''}`;
+        
+        const catClass = `tag-cat-${item.category_name || 'general'}`;
+        
+        row.innerHTML = `
+            <div class="flex items-center space-x-2 truncate">
+                <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${catClass}">
+                    ${item.category_name || 'general'}
+                </span>
+                <span class="font-medium text-zinc-100 truncate">${item.name}</span>
+                ${item.aliases ? `<span class="text-[10px] text-zinc-500 italic truncate">(${item.aliases.split(',')[0]})</span>` : ''}
+            </div>
+            <span class="text-[11px] font-mono text-zinc-400 shrink-0 ml-2">${item.count_formatted || item.count}</span>
+        `;
+
+        row.onmousedown = (e) => {
+            e.preventDefault();
+            selectAutocompleteItem(item);
+        };
+        dd.appendChild(row);
+    });
+
+    dd.classList.remove('hidden');
+}
+
+function hideAutocomplete() {
+    const dd = document.getElementById('tag-autocomplete');
+    if (dd) dd.classList.add('hidden');
+    state.autocompleteItems = [];
+}
+
+function selectAutocompleteItem(item) {
+    const textarea = state.autocompleteTargetInput;
+    if (!textarea) return;
+
+    const text = textarea.value;
+    const cursor = textarea.selectionStart;
+
+    const beforeToken = text.substring(0, state.autocompleteTokenStart);
+    const afterToken = text.substring(state.autocompleteTokenEnd);
+
+    // Check if user had a leading weight paren like (tag
+    const prePart = text.substring(state.autocompleteTokenStart, cursor);
+    const leadingBrackets = prePart.match(/^[({[\s]*/)?.[0] || '';
+
+    // Leading space if after a comma
+    const leadingSpace = beforeToken.endsWith(',') && !beforeToken.endsWith(', ') ? ' ' : '';
+    
+    // Insert tag with comma and space
+    const insertStr = `${leadingSpace}${leadingBrackets}${item.name}, `;
+    textarea.value = beforeToken + insertStr + afterToken.replace(/^[\s,]*/, '');
+
+    const newCursor = beforeToken.length + insertStr.length;
+    textarea.setSelectionRange(newCursor, newCursor);
+    textarea.focus();
+
+    hideAutocomplete();
+}
+
+function handlePromptKeydown(textarea, e) {
+    const dd = document.getElementById('tag-autocomplete');
+    const isVisible = dd && !dd.classList.contains('hidden');
+
+    // 1. Tag weight adjustment with Ctrl+Up / Ctrl+Down
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        adjustTagWeightAtCursor(textarea, e.key === 'ArrowUp' ? 0.05 : -0.05);
+        return;
+    }
+
+    // 2. Autocomplete navigation
+    if (isVisible && state.autocompleteItems.length > 0) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            state.autocompleteActiveIndex = (state.autocompleteActiveIndex + 1) % state.autocompleteItems.length;
+            updateAutocompleteActiveHighlight();
+            return;
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            state.autocompleteActiveIndex = (state.autocompleteActiveIndex - 1 + state.autocompleteItems.length) % state.autocompleteItems.length;
+            updateAutocompleteActiveHighlight();
+            return;
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            const selected = state.autocompleteItems[state.autocompleteActiveIndex];
+            if (selected) selectAutocompleteItem(selected);
+            return;
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            hideAutocomplete();
+            return;
+        }
+    }
+}
+
+function updateAutocompleteActiveHighlight() {
+    const dd = document.getElementById('tag-autocomplete');
+    const children = dd.querySelectorAll('.tag-autocomplete-item');
+    children.forEach((child, idx) => {
+        if (idx === state.autocompleteActiveIndex) {
+            child.classList.add('active');
+            child.scrollIntoView({ block: 'nearest' });
+        } else {
+            child.classList.remove('active');
+        }
+    });
+}
+
+// Adjust weight like WebUI: (tag:1.1)
+function adjustTagWeightAtCursor(textarea, delta) {
+    const text = textarea.value;
+    const selStart = textarea.selectionStart;
+    const selEnd = textarea.selectionEnd;
+
+    let targetRange = [selStart, selEnd];
+
+    // If no text selected, select the tag around cursor
+    if (selStart === selEnd) {
+        const lastComma = text.substring(0, selStart).lastIndexOf(',');
+        const nextComma = text.indexOf(',', selStart);
+        const start = lastComma === -1 ? 0 : lastComma + 1;
+        const end = nextComma === -1 ? text.length : nextComma;
+        targetRange = [start, end];
+    }
+
+    let chunk = text.substring(targetRange[0], targetRange[1]);
+    const leadingWhitespace = chunk.match(/^\s*/)?.[0] || '';
+    const trailingWhitespace = chunk.match(/\s*$/)?.[0] || '';
+    chunk = chunk.trim();
+
+    if (!chunk) return;
+
+    let newChunk = chunk;
+    const weightMatch = chunk.match(/^\((.+):([0-9.]+)\)$/);
+
+    if (weightMatch) {
+        const tagName = weightMatch[1];
+        let currentWeight = parseFloat(weightMatch[2]);
+        let newWeight = Math.round((currentWeight + delta) * 100) / 100;
+        if (Math.abs(newWeight - 1.0) < 0.01) {
+            newChunk = tagName;
+        } else if (newWeight <= 0.1) {
+            newChunk = `(${tagName}:0.1)`;
+        } else {
+            newChunk = `(${tagName}:${newWeight.toFixed(2)})`;
+        }
+    } else {
+        const parenMatch = chunk.match(/^\((.+)\)$/);
+        if (parenMatch) {
+            const tagName = parenMatch[1];
+            let newWeight = Math.round((1.1 + delta) * 100) / 100;
+            newChunk = `(${tagName}:${newWeight.toFixed(2)})`;
+        } else {
+            let newWeight = Math.round((1.0 + delta) * 100) / 100;
+            if (newWeight !== 1.0) {
+                newChunk = `(${chunk}:${newWeight.toFixed(2)})`;
+            }
+        }
+    }
+
+    const replacement = leadingWhitespace + newChunk + trailingWhitespace;
+    textarea.value = text.substring(0, targetRange[0]) + replacement + text.substring(targetRange[1]);
+    textarea.setSelectionRange(targetRange[0] + leadingWhitespace.length, targetRange[0] + replacement.length - trailingWhitespace.length);
+}
+
+// Tag Palettes Drawer
+function toggleTagPalette(category) {
+    const drawer = document.getElementById('tag-pills-drawer');
+    if (state.activePalette === category && !drawer.classList.contains('hidden')) {
+        drawer.classList.add('hidden');
+        state.activePalette = null;
+        return;
+    }
+
+    state.activePalette = category;
+    const tags = state.tagPalettes[category] || [];
+    drawer.innerHTML = '';
+
+    tags.forEach(t => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'px-2 py-0.5 rounded-md text-[11px] bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 hover:border-zinc-700 transition-colors flex items-center gap-1';
+        pill.innerHTML = `<span>+</span><span>${t}</span>`;
+        pill.onclick = () => insertTagIntoActivePrompt(t);
+        drawer.appendChild(pill);
+    });
+
+    drawer.classList.remove('hidden');
+}
+
+function insertTagIntoActivePrompt(tag) {
+    const targetId = state.activePalette === 'negative' ? 'negative-prompt' : (state.lastFocusedPromptInput || 'positive-prompt');
+    const input = document.getElementById(targetId);
+    if (!input) return;
+
+    let val = input.value.trim();
+    if (val.length > 0 && !val.endsWith(',')) {
+        val += ', ';
+    } else if (val.endsWith(',')) {
+        val += ' ';
+    }
+    input.value = val + tag + ', ';
+    input.focus();
+    showToast(`Added: ${tag}`, 'info');
+}
+
+function convertActivePromptSpacesToUnderscores() {
+    const input = document.getElementById(state.lastFocusedPromptInput || 'positive-prompt');
+    if (!input) return;
+    input.value = input.value.replace(/\s+/g, '_').replace(/,_+/g, ', ');
+    showToast('Converted spaces to underscores', 'info');
+}
+
+function convertActivePromptUnderscoresToSpaces() {
+    const input = document.getElementById(state.lastFocusedPromptInput || 'positive-prompt');
+    if (!input) return;
+    input.value = input.value.replace(/_+/g, ' ');
+    showToast('Converted underscores to spaces', 'info');
+}
+
+function cleanPromptTags() {
+    const input = document.getElementById(state.lastFocusedPromptInput || 'positive-prompt');
+    if (!input) return;
+    const parts = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    const seen = new Set();
+    const unique = [];
+    parts.forEach(p => {
+        const lower = p.toLowerCase();
+        if (!seen.has(lower)) {
+            seen.add(lower);
+            unique.push(p);
+        }
+    });
+    input.value = unique.join(', ') + (unique.length > 0 ? ', ' : '');
+    showToast(`Cleaned and deduplicated (${unique.length} tags)`, 'success');
+}
+
+// ==========================================
+// WEBSOCKET MANAGEMENT
+// ==========================================
 function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/${state.clientId}`;
@@ -151,7 +686,6 @@ function initWebSocket() {
         console.error('WebSocket error:', err);
     };
 
-    // Keepalive ping every 25s
     setInterval(() => {
         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
             state.ws.send(JSON.stringify({ type: 'ping' }));
@@ -160,14 +694,12 @@ function initWebSocket() {
 }
 
 function handleWsMessage(msg) {
-    // 1. Gallery updates
     if (msg.type === 'gallery_item_added') {
         onGalleryItemAdded(msg.item);
     } else if (msg.type === 'gallery_item_deleted') {
         onGalleryItemDeleted(msg.relative_path);
     }
 
-    // 2. Generation progress events
     if (msg.channel === 'generation') {
         const data = msg.data || {};
         const params = msg.resolved_params || {};
@@ -204,16 +736,15 @@ function handleWsMessage(msg) {
     }
 }
 
-// Generator Logic
+// ==========================================
+// GENERATOR FORM LOGIC
+// ==========================================
 function toggleSeedInput() {
     const isRandom = document.getElementById('seed-randomize').checked;
     const input = document.getElementById('seed-input');
     input.disabled = isRandom;
-    if (isRandom) {
-        input.classList.add('opacity-50');
-    } else {
-        input.classList.remove('opacity-50');
-    }
+    if (isRandom) input.classList.add('opacity-50');
+    else input.classList.remove('opacity-50');
 }
 
 function rollNewSeed() {
@@ -277,7 +808,6 @@ async function handleGenerate() {
         scheduler: document.getElementById('scheduler-select').value || null,
     };
 
-    // Set UI to generating state
     state.isGenerating = true;
     startGenerationTimer();
 
@@ -355,7 +885,7 @@ function finishGeneration() {
 function displayGeneratedImage(relative_path, params = {}) {
     state.currentPreviewData = { relative_path, params };
 
-    const imgUrl = `/api/images/${encodeURIComponent(relative_path)}`;
+    const imgUrl = `/api/images/${encodeURIComponent(cleanRelPath(relative_path))}`;
     const previewImg = document.getElementById('preview-img');
     const placeholder = document.getElementById('preview-placeholder');
     const wrapper = document.getElementById('preview-image-wrapper');
@@ -381,14 +911,14 @@ function displayGeneratedImage(relative_path, params = {}) {
 
 function openCurrentInModal() {
     if (state.currentPreviewData && state.currentPreviewData.relative_path) {
-        openImageModal(state.currentPreviewData.relative_path);
+        openImageModalByPath(state.currentPreviewData.relative_path);
     }
 }
 
 function downloadCurrentPreview() {
     if (state.currentPreviewData && state.currentPreviewData.relative_path) {
         const a = document.createElement('a');
-        a.href = `/api/images/${encodeURIComponent(state.currentPreviewData.relative_path)}`;
+        a.href = `/api/images/${encodeURIComponent(cleanRelPath(state.currentPreviewData.relative_path))}`;
         a.download = state.currentPreviewData.relative_path.split('/').pop();
         document.body.appendChild(a);
         a.click();
@@ -396,7 +926,17 @@ function downloadCurrentPreview() {
     }
 }
 
-// Gallery View Logic
+// ==========================================
+// GALLERY VIEW LOGIC
+// ==========================================
+function cleanRelPath(p) {
+    if (!p) return '';
+    let s = p.replace(/\\/g, '/');
+    if (s.startsWith('/app/output/')) s = s.substring('/app/output/'.length);
+    else if (s.startsWith('/app/output')) s = s.substring('/app/output'.length);
+    return s.replace(/^\/+/, '');
+}
+
 function debounceGallerySearch() {
     clearTimeout(state.searchTimeout);
     state.searchTimeout = setTimeout(() => {
@@ -434,7 +974,6 @@ async function loadGallery(reset = false) {
 
         renderGalleryGrid();
 
-        // Load More button visibility
         const loadMoreContainer = document.getElementById('gallery-load-more-container');
         if (state.galleryImages.length < data.total) {
             loadMoreContainer.classList.remove('hidden');
@@ -442,7 +981,6 @@ async function loadGallery(reset = false) {
             loadMoreContainer.classList.add('hidden');
         }
 
-        // Empty state visibility
         const emptyState = document.getElementById('gallery-empty');
         if (data.total === 0) {
             emptyState.classList.remove('hidden');
@@ -468,23 +1006,23 @@ function renderGalleryGrid() {
     const grid = document.getElementById('gallery-grid');
     grid.innerHTML = '';
 
-    state.galleryImages.forEach(item => {
-        const card = createGalleryCard(item);
+    state.galleryImages.forEach((item, index) => {
+        const card = createGalleryCard(item, index);
         grid.appendChild(card);
     });
 }
 
-function createGalleryCard(item) {
+function createGalleryCard(item, index) {
     const card = document.createElement('div');
-    card.id = `gallery-card-${sanitizeId(item.relative_path)}`;
+    const clean = cleanRelPath(item.relative_path);
+    card.id = `gallery-card-${sanitizeId(clean)}`;
     card.className = 'group relative aspect-square bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800/80 hover:border-brand-500/80 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-xl hover:shadow-brand-500/10';
 
-    const thumbUrl = `/api/thumbnails/${encodeURIComponent(item.relative_path)}`;
+    const thumbUrl = `/api/thumbnails/${encodeURIComponent(clean)}`;
 
     card.innerHTML = `
         <img src="${thumbUrl}" alt="${item.filename}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
         
-        <!-- Gradient Overlay -->
         <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-2.5 flex flex-col justify-end">
             <span class="text-xs font-semibold text-white truncate drop-shadow">${item.filename}</span>
             <div class="flex items-center justify-between text-[10px] text-zinc-300 mt-1">
@@ -494,7 +1032,7 @@ function createGalleryCard(item) {
         </div>
     `;
 
-    card.onclick = () => openImageModal(item.relative_path);
+    card.onclick = () => openImageModalByIndex(index);
     return card;
 }
 
@@ -503,49 +1041,66 @@ function sanitizeId(path) {
 }
 
 function onGalleryItemAdded(item) {
-    // Increment badge
     const badge = document.getElementById('gallery-count-badge');
     let count = parseInt(badge.innerText, 10) || 0;
     badge.innerText = count + 1;
 
-    // Prepend to gallery if active or in memory
-    const existingIndex = state.galleryImages.findIndex(i => i.relative_path === item.relative_path);
+    const clean = cleanRelPath(item.relative_path);
+    const existingIndex = state.galleryImages.findIndex(i => cleanRelPath(i.relative_path) === clean);
     if (existingIndex === -1) {
         state.galleryImages.unshift(item);
         const grid = document.getElementById('gallery-grid');
         const empty = document.getElementById('gallery-empty');
-        empty.classList.add('hidden');
+        if (empty) empty.classList.add('hidden');
 
-        const card = createGalleryCard(item);
+        const card = createGalleryCard(item, 0);
         grid.insertBefore(card, grid.firstChild);
     }
 }
 
 function onGalleryItemDeleted(relative_path) {
-    // Decrement badge
+    const clean = cleanRelPath(relative_path);
     const badge = document.getElementById('gallery-count-badge');
     let count = parseInt(badge.innerText, 10) || 0;
     if (count > 0) badge.innerText = count - 1;
 
-    // Remove from in-memory list
-    state.galleryImages = state.galleryImages.filter(i => i.relative_path !== relative_path);
+    state.galleryImages = state.galleryImages.filter(i => cleanRelPath(i.relative_path) !== clean);
 
-    // Remove DOM card
-    const card = document.getElementById(`gallery-card-${sanitizeId(relative_path)}`);
-    if (card) {
-        card.remove();
-    }
+    const card = document.getElementById(`gallery-card-${sanitizeId(clean)}`);
+    if (card) card.remove();
 
     if (state.galleryImages.length === 0) {
-        document.getElementById('gallery-empty').classList.remove('hidden');
+        const empty = document.getElementById('gallery-empty');
+        if (empty) empty.classList.remove('hidden');
     }
 }
 
-// Image Detail Modal Logic
-async function openImageModal(relativePath) {
-    state.currentModalImage = null;
+// ==========================================
+// IMAGE DETAIL MODAL WITH PREV / NEXT NAV
+// ==========================================
+function openImageModalByPath(relativePath) {
+    const clean = cleanRelPath(relativePath);
+    let idx = state.galleryImages.findIndex(i => cleanRelPath(i.relative_path) === clean);
+    if (idx === -1) idx = 0;
+    openImageModalByIndex(idx, clean);
+}
+
+async function openImageModalByIndex(index, fallbackPath = null) {
     const modal = document.getElementById('image-modal');
     modal.classList.remove('hidden');
+
+    if (state.galleryImages.length > 0) {
+        if (index < 0) index = state.galleryImages.length - 1;
+        if (index >= state.galleryImages.length) index = 0;
+        state.currentModalIndex = index;
+    }
+
+    const item = state.galleryImages[state.currentModalIndex] || {};
+    const relativePath = cleanRelPath(item.relative_path || fallbackPath);
+
+    document.getElementById('modal-nav-indicator').innerText = state.galleryImages.length > 0 
+        ? `${state.currentModalIndex + 1} / ${state.galleryImages.length}`
+        : '1 / 1';
 
     const modalImg = document.getElementById('modal-img');
     const modalFilename = document.getElementById('modal-filename');
@@ -553,11 +1108,11 @@ async function openImageModal(relativePath) {
     const modalDim = document.getElementById('modal-img-dim');
     const modalDownload = document.getElementById('modal-download-link');
 
-    // Reset fields
     modalImg.src = '';
-    modalFilename.innerText = relativePath.split('/').pop();
+    modalFilename.innerText = relativePath.split('/').pop() || item.filename || 'Image Details';
     modalDate.innerText = 'Loading metadata...';
     modalDim.innerText = '';
+    document.getElementById('modal-pos-tags').innerHTML = '';
     document.getElementById('modal-pos-prompt').innerText = 'Loading...';
     document.getElementById('modal-neg-prompt').innerText = 'Loading...';
     document.getElementById('modal-seed').innerText = '-';
@@ -576,6 +1131,7 @@ async function openImageModal(relativePath) {
         const res = await fetch(`/api/images/${encodeURIComponent(relativePath)}/metadata`);
         if (!res.ok) throw new Error('Metadata not found');
         const meta = await res.json();
+        meta.relative_path = cleanRelPath(meta.relative_path);
         state.currentModalImage = meta;
 
         modalFilename.innerText = meta.filename;
@@ -593,11 +1149,40 @@ async function openImageModal(relativePath) {
 
         document.getElementById('modal-raw-json').innerText = JSON.stringify(meta.raw || {}, null, 2);
 
+        // Render clickable tag pills
+        renderModalPromptTags(p.positive_prompt);
+
     } catch (e) {
         console.warn('Metadata fetch error:', e);
         modalDate.innerText = 'No metadata embedded';
         document.getElementById('modal-pos-prompt').innerText = '(No metadata chunk found)';
     }
+}
+
+function renderModalPromptTags(promptText) {
+    const container = document.getElementById('modal-pos-tags');
+    container.innerHTML = '';
+    if (!promptText) return;
+
+    const tags = promptText.split(',').map(s => s.trim()).filter(Boolean);
+    tags.slice(0, 40).forEach(t => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'px-2 py-0.5 rounded text-[10px] bg-zinc-900 hover:bg-brand-600 text-zinc-300 hover:text-white border border-zinc-800 transition-colors';
+        pill.innerText = t;
+        pill.title = 'Click to copy tag';
+        pill.onclick = () => {
+            navigator.clipboard.writeText(t);
+            showToast(`Copied tag: ${t}`, 'info');
+        };
+        container.appendChild(pill);
+    });
+}
+
+function navigateModalImage(direction) {
+    if (state.galleryImages.length === 0) return;
+    const nextIndex = state.currentModalIndex + direction;
+    openImageModalByIndex(nextIndex);
 }
 
 function closeImageModal() {
@@ -639,12 +1224,8 @@ function loadModalPromptIntoGenerator() {
     if (!state.currentModalImage) return;
     const p = state.currentModalImage.parsed || {};
 
-    if (p.positive_prompt) {
-        document.getElementById('positive-prompt').value = p.positive_prompt;
-    }
-    if (p.negative_prompt) {
-        document.getElementById('negative-prompt').value = p.negative_prompt;
-    }
+    if (p.positive_prompt) document.getElementById('positive-prompt').value = p.positive_prompt;
+    if (p.negative_prompt) document.getElementById('negative-prompt').value = p.negative_prompt;
     if (p.seed !== undefined && p.seed !== null) {
         document.getElementById('seed-input').value = p.seed;
         document.getElementById('seed-randomize').checked = false;
@@ -661,41 +1242,211 @@ function loadModalPromptIntoGenerator() {
     if (p.width && p.height) {
         setResolution(p.width, p.height);
     }
-    if (p.sampler_name) {
-        document.getElementById('sampler-select').value = p.sampler_name;
-    }
-    if (p.scheduler) {
-        document.getElementById('scheduler-select').value = p.scheduler;
-    }
+    if (p.sampler_name) document.getElementById('sampler-select').value = p.sampler_name;
+    if (p.scheduler) document.getElementById('scheduler-select').value = p.scheduler;
 
     closeImageModal();
     switchTab('generator');
     showToast('Loaded parameters into Generator', 'success');
 }
 
-async function confirmDeleteModalImage() {
-    if (!state.currentModalImage) return;
-    const relPath = state.currentModalImage.relative_path || state.currentModalImage.filename;
-    const filename = state.currentModalImage.filename;
-
-    if (!confirm(`Permanently delete "${filename}" from the mounted output directory?\n\nThis cannot be undone.`)) {
+// ==========================================
+// TIKTOK STYLE FULLSCREEN RANDOM MODE
+// ==========================================
+function openTikTokMode() {
+    if (state.galleryImages.length === 0) {
+        showToast('No images available in gallery', 'error');
         return;
     }
 
+    // Shuffle queue randomly
+    state.tiktokQueue = [...state.galleryImages].sort(() => Math.random() - 0.5);
+    state.tiktokIndex = 0;
+
+    const modal = document.getElementById('tiktok-modal');
+    modal.classList.remove('hidden');
+
+    displayTikTokItem(0);
+}
+
+async function displayTikTokItem(index) {
+    if (state.tiktokQueue.length === 0) return;
+    if (index < 0) index = state.tiktokQueue.length - 1;
+    if (index >= state.tiktokQueue.length) index = 0;
+    state.tiktokIndex = index;
+
+    const item = state.tiktokQueue[index];
+    const clean = cleanRelPath(item.relative_path);
+    state.currentTikTokImage = item;
+
+    const img = document.getElementById('tiktok-img');
+    img.classList.remove('tiktok-slide-up');
+    void img.offsetWidth; // Trigger reflow for animation
+    img.src = `/api/images/${encodeURIComponent(clean)}`;
+    img.classList.add('tiktok-slide-up');
+
+    document.getElementById('tiktok-filename').innerText = item.filename;
+    document.getElementById('tiktok-index-counter').innerText = `${index + 1} / ${state.tiktokQueue.length}`;
+    document.getElementById('tiktok-meta-badge').innerText = item.file_size_human;
+
+    // Fetch embedded prompt info
     try {
-        const res = await fetch(`/api/images/${encodeURIComponent(relPath)}`, {
+        const res = await fetch(`/api/images/${encodeURIComponent(clean)}/metadata`);
+        if (res.ok) {
+            const meta = await res.json();
+            state.currentTikTokImage = meta;
+            const p = meta.parsed || {};
+            document.getElementById('tiktok-prompt-text').innerText = p.positive_prompt || '(No prompt embedded)';
+            document.getElementById('tiktok-meta-badge').innerText = `${p.seed ? 'Seed: ' + p.seed + ' · ' : ''}${meta.file_size_human}`;
+            
+            // Render pills
+            const tagsCont = document.getElementById('tiktok-prompt-tags');
+            tagsCont.innerHTML = '';
+            if (p.positive_prompt) {
+                p.positive_prompt.split(',').slice(0, 15).forEach(t => {
+                    const pill = document.createElement('span');
+                    pill.className = 'px-1.5 py-0.5 rounded text-[10px] bg-zinc-800/80 text-zinc-300';
+                    pill.innerText = t.trim();
+                    tagsCont.appendChild(pill);
+                });
+            }
+        }
+    } catch (e) {
+        document.getElementById('tiktok-prompt-text').innerText = '';
+    }
+}
+
+function nextTikTokImage() {
+    displayTikTokItem(state.tiktokIndex + 1);
+}
+
+function prevTikTokImage() {
+    displayTikTokItem(state.tiktokIndex - 1);
+}
+
+function handleTikTokWheel(e) {
+    if (Math.abs(e.deltaY) > 40) {
+        if (e.deltaY > 0) nextTikTokImage();
+        else prevTikTokImage();
+    }
+}
+
+function toggleTikTokAutoplay() {
+    const btn = document.getElementById('btn-tiktok-autoplay');
+    const icon = document.getElementById('tiktok-autoplay-icon');
+    const text = document.getElementById('tiktok-autoplay-text');
+
+    if (state.tiktokAutoplayActive) {
+        clearInterval(state.tiktokAutoplayInterval);
+        state.tiktokAutoplayActive = false;
+        icon.innerText = '▶';
+        text.innerText = 'Auto-Play';
+        btn.classList.remove('bg-brand-600', 'text-white');
+    } else {
+        state.tiktokAutoplayActive = true;
+        icon.innerText = '⏸';
+        text.innerText = 'Playing (5s)';
+        btn.classList.add('bg-brand-600', 'text-white');
+        state.tiktokAutoplayInterval = setInterval(nextTikTokImage, 5000);
+    }
+}
+
+function closeTikTokMode() {
+    if (state.tiktokAutoplayActive) toggleTikTokAutoplay();
+    document.getElementById('tiktok-modal').classList.add('hidden');
+    state.currentTikTokImage = null;
+}
+
+function copyTikTokPrompt() {
+    const text = document.getElementById('tiktok-prompt-text').innerText;
+    if (text) {
+        navigator.clipboard.writeText(text);
+        showToast('Prompt copied to clipboard', 'info');
+    }
+}
+
+function loadTikTokPromptIntoGenerator() {
+    if (!state.currentTikTokImage) return;
+    const p = state.currentTikTokImage.parsed || {};
+    if (p.positive_prompt) document.getElementById('positive-prompt').value = p.positive_prompt;
+    if (p.negative_prompt) document.getElementById('negative-prompt').value = p.negative_prompt;
+    if (p.seed) {
+        document.getElementById('seed-input').value = p.seed;
+        document.getElementById('seed-randomize').checked = false;
+        toggleSeedInput();
+    }
+    closeTikTokMode();
+    switchTab('generator');
+    showToast('Loaded into Generator', 'success');
+}
+
+// ==========================================
+// INTERNAL DELETE CONFIRMATION MODAL
+// ==========================================
+function openDeleteConfirmModal(imageObj) {
+    if (!imageObj) return;
+    state.imagePendingDelete = imageObj;
+
+    const modal = document.getElementById('delete-confirm-modal');
+    const clean = cleanRelPath(imageObj.relative_path || imageObj.filename);
+    
+    document.getElementById('delete-modal-filename').innerText = imageObj.filename || clean.split('/').pop();
+    document.getElementById('delete-modal-size').innerText = `Size: ${imageObj.file_size_human || 'Unknown'}`;
+    document.getElementById('delete-modal-thumb').src = `/api/thumbnails/${encodeURIComponent(clean)}`;
+
+    modal.classList.remove('hidden');
+}
+
+function closeDeleteConfirmModal() {
+    document.getElementById('delete-confirm-modal').classList.add('hidden');
+    state.imagePendingDelete = null;
+}
+
+async function executePermanentDelete() {
+    if (!state.imagePendingDelete) return;
+
+    const imageObj = state.imagePendingDelete;
+    const clean = cleanRelPath(imageObj.relative_path || imageObj.filename);
+    const filename = imageObj.filename || clean.split('/').pop();
+
+    const btn = document.getElementById('btn-execute-delete');
+    btn.disabled = true;
+    btn.innerText = 'Deleting...';
+
+    try {
+        const res = await fetch(`/api/images/${encodeURIComponent(clean)}`, {
             method: 'DELETE'
         });
 
         if (!res.ok) {
-            throw new Error('Failed to delete image');
+            const err = await res.json().catch(() => ({ detail: 'Server error' }));
+            throw new Error(err.detail || 'Delete failed');
         }
 
-        showToast(`Deleted ${filename}`, 'success');
-        closeImageModal();
+        showToast(`Permanently deleted: ${filename}`, 'success');
+        closeDeleteConfirmModal();
 
-        // Also reset generator preview if it was showing the deleted image
-        if (state.currentPreviewData && state.currentPreviewData.relative_path === relPath) {
+        // If inside regular detail modal, advance to next image or close
+        if (!document.getElementById('image-modal').classList.contains('hidden')) {
+            if (state.galleryImages.length > 1) {
+                navigateModalImage(1);
+            } else {
+                closeImageModal();
+            }
+        }
+
+        // If inside TikTok modal, advance
+        if (!document.getElementById('tiktok-modal').classList.contains('hidden')) {
+            if (state.tiktokQueue.length > 1) {
+                state.tiktokQueue = state.tiktokQueue.filter(i => cleanRelPath(i.relative_path) !== clean);
+                nextTikTokImage();
+            } else {
+                closeTikTokMode();
+            }
+        }
+
+        // If preview was showing this image, reset
+        if (state.currentPreviewData && cleanRelPath(state.currentPreviewData.relative_path) === clean) {
             document.getElementById('preview-image-wrapper').classList.add('hidden');
             document.getElementById('preview-meta-footer').classList.add('hidden');
             document.getElementById('preview-placeholder').classList.remove('hidden');
@@ -704,10 +1455,15 @@ async function confirmDeleteModalImage() {
 
     } catch (e) {
         showToast(`Delete failed: ${e.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerText = 'Delete Permanently';
     }
 }
 
-// Workflow Editor Logic
+// ==========================================
+// WORKFLOW EDITOR VIEW LOGIC
+// ==========================================
 async function loadWorkflowTemplate() {
     try {
         const res = await fetch('/api/workflow');
@@ -728,7 +1484,7 @@ async function saveWorkflowTemplate() {
             body: JSON.stringify({ workflow: parsed })
         });
         if (res.ok) {
-            showToast('Workflow template saved successfully', 'success');
+            showToast('Applied workflow template to Generator', 'success');
         } else {
             throw new Error('Failed to save');
         }
@@ -738,38 +1494,85 @@ async function saveWorkflowTemplate() {
 }
 
 async function resetWorkflowTemplate() {
-    if (!confirm('Reset workflow template to default?')) return;
     try {
         const res = await fetch('/api/workflow/reset', { method: 'POST' });
         const data = await res.json();
         document.getElementById('workflow-editor').value = JSON.stringify(data.workflow, null, 2);
         showToast('Reset to default workflow', 'info');
+        await loadAvailableWorkflows();
     } catch (e) {
         showToast('Failed to reset workflow', 'error');
     }
 }
 
-// Global Keyboard Shortcuts
+// ==========================================
+// GLOBAL KEYBOARD SHORTCUTS
+// ==========================================
 document.addEventListener('keydown', (e) => {
+    // Escape closes modals
+    if (e.key === 'Escape') {
+        const deleteModal = document.getElementById('delete-confirm-modal');
+        if (!deleteModal.classList.contains('hidden')) {
+            closeDeleteConfirmModal();
+            return;
+        }
+        const tiktokModal = document.getElementById('tiktok-modal');
+        if (!tiktokModal.classList.contains('hidden')) {
+            closeTikTokMode();
+            return;
+        }
+        const imgModal = document.getElementById('image-modal');
+        if (!imgModal.classList.contains('hidden')) {
+            closeImageModal();
+            return;
+        }
+    }
+
+    // Modal navigation with Left / Right arrows
+    const imgModal = document.getElementById('image-modal');
+    if (!imgModal.classList.contains('hidden')) {
+        if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            navigateModalImage(-1);
+            return;
+        } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            navigateModalImage(1);
+            return;
+        }
+    }
+
+    // TikTok mode keyboard navigation
+    const tiktokModal = document.getElementById('tiktok-modal');
+    if (!tiktokModal.classList.contains('hidden')) {
+        if (e.key === 'ArrowDown' || e.key === ' ') {
+            e.preventDefault();
+            nextTikTokImage();
+            return;
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            prevTikTokImage();
+            return;
+        }
+    }
+
     // Ctrl+Enter or Cmd+Enter to generate
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         if (state.activeTab === 'generator' && !state.isGenerating) {
             handleGenerate();
         }
     }
-    // Escape to close modal
-    if (e.key === 'Escape') {
-        closeImageModal();
-    }
 });
 
-// Initialization on DOM Ready
+// Initialization
 window.addEventListener('DOMContentLoaded', () => {
     initWebSocket();
     checkComfyStatus();
     loadModels();
     loadGallery(true);
+    loadAvailableWorkflows();
+    preloadTopTags();
+    initTagAutocomplete();
 
-    // Periodic status check
     setInterval(checkComfyStatus, 10000);
 });

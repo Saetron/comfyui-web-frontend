@@ -164,9 +164,19 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
     Extract embedded generation metadata and file stats from an image.
     Supports ComfyUI PNG text chunks, A1111 parameters, EXIF UserComment, etc.
     """
+    # Calculate path relative to OUTPUT_DIR if applicable
+    rel = file_path.name
+    try:
+        from app.config import OUTPUT_DIR
+        resolved_file = file_path.resolve()
+        if resolved_file.is_relative_to(OUTPUT_DIR):
+            rel = resolved_file.relative_to(OUTPUT_DIR).as_posix()
+    except Exception:
+        pass
+
     metadata: Dict[str, Any] = {
         "filename": file_path.name,
-        "relative_path": str(file_path.as_posix()),
+        "relative_path": rel,
         "file_size": 0,
         "file_size_human": "0 KB",
         "modified_at": None,

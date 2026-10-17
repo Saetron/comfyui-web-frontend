@@ -33,19 +33,97 @@
 }
 
 .glass-modal {
-    background: rgba(18, 18, 20, 0.92);
+    background: rgba(18, 18, 20, 0.94);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(63, 63, 70, 0.6);
 }
 
-/* Modal transition */
-.modal-enter {
-    opacity: 0;
-    transform: scale(0.97);
+.glass-tiktok-card {
+    background: rgba(12, 12, 14, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(63, 63, 70, 0.4);
 }
-.modal-enter-active {
-    opacity: 1;
-    transform: scale(1);
-    transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+
+/* Danbooru Tag Autocomplete Dropdown */
+.tag-autocomplete-dropdown {
+    position: absolute;
+    z-index: 60;
+    max-height: 280px;
+    overflow-y: auto;
+    background: rgba(18, 18, 22, 0.96);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(82, 82, 91, 0.8);
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    width: 380px;
+    max-width: 90vw;
+}
+
+.tag-autocomplete-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(39, 39, 42, 0.6);
+    transition: background 0.1s ease;
+}
+
+.tag-autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.tag-autocomplete-item.active,
+.tag-autocomplete-item:hover {
+    background: rgba(99, 102, 241, 0.25);
+}
+
+/* Danbooru Categories Color Badges */
+.tag-cat-general {
+    color: #38bdf8;
+    background: rgba(14, 165, 233, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.tag-cat-artist {
+    color: #fb7185;
+    background: rgba(244, 63, 94, 0.15);
+    border: 1px solid rgba(251, 113, 133, 0.3);
+}
+
+.tag-cat-copyright {
+    color: #c084fc;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(192, 132, 252, 0.3);
+}
+
+.tag-cat-character {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.tag-cat-meta {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+/* TikTok Fullscreen Transitions */
+.tiktok-slide-up {
+    animation: tiktokSlideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes tiktokSlideUp {
+    from {
+        opacity: 0.3;
+        transform: translateY(30px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }

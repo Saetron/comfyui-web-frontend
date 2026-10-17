@@ -27,7 +27,20 @@ DEFAULT_WORKFLOW_TEMPLATE = BASE_DIR / "app" / "templates" / "default_workflow_a
 HOST = os.environ.get("HOST", "0.0.0.0")
 PORT = int(os.environ.get("PORT", "8080"))
 
+# Default Negative Prompt (configurable via environment variable)
+DEFAULT_NEGATIVE_PROMPT = os.environ.get(
+    "DEFAULT_NEGATIVE_PROMPT",
+    "worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, blurry, deformed",
+)
+
+# Workflows and Tags directories
+WORKFLOWS_DIR = DATA_DIR / "workflows"
+DEFAULT_TAGS_FILE = BASE_DIR / "app" / "data" / "tags" / "danbooru.csv"
+USER_TAGS_DIR = DATA_DIR / "tags"
+
 # Ensure essential directories exist
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
+USER_TAGS_DIR.mkdir(parents=True, exist_ok=True)
+WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)

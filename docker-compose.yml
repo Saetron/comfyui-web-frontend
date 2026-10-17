@@ -8,8 +8,8 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    environment:
       - COMFYUI_URL=${COMFYUI_URL:-http://host.docker.internal:8188}
+      - DEFAULT_NEGATIVE_PROMPT=${DEFAULT_NEGATIVE_PROMPT:-worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, blurry, deformed}
       - OUTPUT_DIR=/app/output
       - DATA_DIR=/app/data
       - PORT=8080
