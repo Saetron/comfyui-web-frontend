@@ -616,9 +616,13 @@ class ComfyService:
             return res.json()
 
     async def interrupt(self) -> bool:
-        """Interrupt current generation on ComfyUI."""
+        """Interrupt current generation on ComfyUI and clear queued prompts."""
         try:
             async with httpx.AsyncClient(timeout=4.0) as client:
+                try:
+                    await client.post(f"{self.comfy_url}/queue", json={"clear": True})
+                except Exception:
+                    pass
                 res = await client.post(f"{self.comfy_url}/interrupt")
                 return res.status_code == 200
         except Exception as e:

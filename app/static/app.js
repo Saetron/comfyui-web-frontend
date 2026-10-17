@@ -46,6 +46,12 @@ const state = {
     autocompleteTokenEnd: 0,
     autocompleteDebounceTimer: null,
 
+    // Batch Queuing & Animation
+    batchCount: 1,
+    activePromptIds: new Set(),
+    queuedTotalCount: 0,
+    queuedCompletedCount: 0,
+
     // Tag Palettes Data
     tagPalettes: {
         quality: ['masterpiece', 'best quality', 'highly detailed', 'highres', 'absurdres', 'ultra-detailed', '8k wallpaper', 'sharp focus', 'intricate details'],
@@ -941,6 +947,14 @@ function initWebSocket() {
     }, 25000);
 }
 
+const summonKaomojis = [
+    '(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧ Summoning Artwork...',
+    '(★ω★) Channeling latent energy...',
+    '(≧◡≦) Refining pixels and anime details...',
+    '(✧ω✧) Blending vibrant colors...',
+    '(*¯︶¯*) Almost finished magic...',
+];
+
 function handleWsMessage(msg) {
     if (msg.type === 'gallery_item_added') {
         onGalleryItemAdded(msg.item);
@@ -961,27 +975,61 @@ function handleWsMessage(msg) {
             const queue = data.queue_remaining;
             if (nodeLabel) nodeLabel.innerText = queue > 0 ? `In Queue (position: ${queue})...` : 'Starting generation...';
             if (statusHeading) statusHeading.innerText = 'Queued';
+            const loaderNode = document.getElementById('loader-node-status');
+            if (loaderNode) loaderNode.innerText = queue > 0 ? `In ComfyUI queue (position: ${queue})...` : 'Preparing generation graph...';
+            if (queue === 0 && state.activePromptIds.size === 0 && state.isGenerating) {
+                finishGeneration();
+            }
         } else if (data.type === 'execution_start') {
             if (nodeLabel) nodeLabel.innerText = 'Initializing nodes...';
             if (statusHeading) statusHeading.innerText = 'Running';
+            const loaderNode = document.getElementById('loader-node-status');
+            if (loaderNode) loaderNode.innerText = 'Initializing nodes and models...';
         } else if (data.type === 'executing') {
             if (nodeLabel) nodeLabel.innerText = `Executing node #${data.node}...`;
+            const loaderNode = document.getElementById('loader-node-status');
+            if (loaderNode) loaderNode.innerText = `Executing node #${data.node}...`;
         } else if (data.type === 'progress') {
             const pct = data.percentage || 0;
             if (progressBar) progressBar.style.width = `${pct}%`;
             if (progressPct) progressPct.innerText = `${pct}%`;
             if (nodeLabel) nodeLabel.innerText = `Sampling: step ${data.value}/${data.max} (${pct}%)`;
             if (statusHeading) statusHeading.innerText = `Step ${data.value}/${data.max}`;
+
+            const loaderPct = document.getElementById('loader-pct-badge');
+            if (loaderPct) loaderPct.innerText = `${pct}%`;
+            const loaderNode = document.getElementById('loader-node-status');
+            if (loaderNode) loaderNode.innerText = `Sampling: step ${data.value}/${data.max} (${pct}%)`;
+            const loaderKaomoji = document.getElementById('loader-kaomoji');
+            if (loaderKaomoji) {
+                loaderKaomoji.innerText = summonKaomojis[data.value % summonKaomojis.length];
+            }
         } else if (data.type === 'images_ready') {
             if (data.images && data.images.length > 0) {
                 const imgInfo = data.images[0];
                 const relPath = (imgInfo.subfolder ? imgInfo.subfolder + '/' : '') + imgInfo.filename;
                 displayGeneratedImage(relPath, params);
             }
+            if (data.prompt_id && state.activePromptIds.has(data.prompt_id)) {
+                state.activePromptIds.delete(data.prompt_id);
+                state.queuedCompletedCount++;
+            }
+            updateQueueStatusDisplay();
         } else if (data.type === 'complete') {
-            finishGeneration();
+            if (data.prompt_id && state.activePromptIds.has(data.prompt_id)) {
+                state.activePromptIds.delete(data.prompt_id);
+                state.queuedCompletedCount++;
+            }
+            updateQueueStatusDisplay();
+            if (state.activePromptIds.size === 0) {
+                finishGeneration();
+            }
         } else if (data.type === 'error') {
-            finishGeneration();
+            if (data.prompt_id) state.activePromptIds.delete(data.prompt_id);
+            updateQueueStatusDisplay();
+            if (state.activePromptIds.size === 0) {
+                finishGeneration();
+            }
             showToast(`Generation error: ${data.error}`, 'error');
             if (statusHeading) statusHeading.innerText = 'Error';
             if (nodeLabel) nodeLabel.innerText = `Error: ${data.error}`;
@@ -989,9 +1037,78 @@ function handleWsMessage(msg) {
     }
 }
 
+function updateQueueStatusDisplay() {
+    const badge = document.getElementById('batch-queue-badge');
+    const loaderQueue = document.getElementById('loader-queue-status');
+    const genText = document.getElementById('generate-text');
+
+    const remaining = state.activePromptIds.size;
+    if (remaining > 0) {
+        if (badge) {
+            badge.innerText = `${remaining} queued`;
+            badge.classList.remove('hidden');
+        }
+        if (loaderQueue) {
+            loaderQueue.innerText = `Batch: ${state.queuedCompletedCount + 1} / ${state.queuedTotalCount} (${remaining} in queue)`;
+        }
+        if (genText && state.isGenerating) {
+            genText.innerText = `(≧◡≦) ➕ Queue +${state.batchCount} More!`;
+        }
+    } else {
+        if (badge) badge.classList.add('hidden');
+        if (loaderQueue) {
+            loaderQueue.innerText = `Batch: ${state.queuedCompletedCount} / ${state.queuedTotalCount || 1} Complete`;
+        }
+    }
+}
+
 // ==========================================
-// GENERATOR FORM LOGIC
+// GENERATOR FORM LOGIC & BATCH QUEUE
 // ==========================================
+function setBatchCount(count) {
+    state.batchCount = Math.max(1, Math.min(parseInt(count, 10) || 1, 50));
+    updateBatchCountUI();
+}
+
+function adjustBatchCount(delta) {
+    setBatchCount((state.batchCount || 1) + delta);
+}
+
+function onBatchInputChange(val) {
+    setBatchCount(val);
+}
+
+function updateBatchCountUI() {
+    const input = document.getElementById('batch-count-input');
+    if (input) input.value = state.batchCount;
+
+    [1, 2, 4, 8].forEach(n => {
+        const btn = document.getElementById(`batch-btn-${n}`);
+        if (btn) {
+            if (state.batchCount === n) {
+                btn.classList.add('active', 'border-pink-500/40', 'bg-pink-500/20', 'text-pink-200');
+                btn.classList.remove('border-white/10', 'bg-white/5', 'text-zinc-300');
+            } else {
+                btn.classList.remove('active', 'border-pink-500/40', 'bg-pink-500/20', 'text-pink-200');
+                btn.classList.add('border-white/10', 'bg-white/5', 'text-zinc-300');
+            }
+        }
+    });
+
+    const genText = document.getElementById('generate-text');
+    if (genText) {
+        if (state.isGenerating) {
+            genText.innerText = `(≧◡≦) ➕ Queue +${state.batchCount} More!`;
+        } else {
+            if (state.batchCount > 1) {
+                genText.innerText = `(★ω★) 🚀 Queue ${state.batchCount} Images!`;
+            } else {
+                genText.innerText = '(★ω★) 🚀 Spark Generation!';
+            }
+        }
+    }
+}
+
 function toggleSeedInput() {
     const isRandom = document.getElementById('seed-randomize').checked;
     const input = document.getElementById('seed-input');
@@ -1032,8 +1149,6 @@ function clearInput(id) {
 }
 
 async function handleGenerate() {
-    if (state.isGenerating) return;
-
     const positivePromptEl = document.getElementById('positive-prompt');
     const positivePrompt = positivePromptEl ? positivePromptEl.value.trim() : '';
     const negativePromptEl = document.getElementById('negative-prompt');
@@ -1059,11 +1174,14 @@ async function handleGenerate() {
     const samplerEl = document.getElementById('sampler-select');
     const schedEl = document.getElementById('scheduler-select');
 
+    const batchCount = state.batchCount || 1;
+
     const payload = {
         positive_prompt: positivePrompt,
         negative_prompt: negativePrompt,
         seed: seed,
         randomize_seed: isRandomSeed,
+        batch_count: batchCount,
         client_id: state.clientId,
         steps: stepsEl ? parseInt(stepsEl.value, 10) : 20,
         cfg: cfgEl ? parseFloat(cfgEl.value) : 7.5,
@@ -1074,27 +1192,44 @@ async function handleGenerate() {
         scheduler: (schedEl && schedEl.value) ? schedEl.value : null,
     };
 
-    state.isGenerating = true;
-    startGenerationTimer();
+    const isAppending = state.isGenerating;
 
-    const btnGen = document.getElementById('btn-generate');
-    const btnInterrupt = document.getElementById('btn-interrupt');
-    const genText = document.getElementById('generate-text');
-    if (btnGen) btnGen.disabled = true;
-    if (genText) genText.innerText = 'Queuing...';
-    if (btnInterrupt) btnInterrupt.classList.remove('hidden');
+    if (!isAppending) {
+        state.isGenerating = true;
+        state.activePromptIds.clear();
+        state.queuedTotalCount = 0;
+        state.queuedCompletedCount = 0;
+        startGenerationTimer();
 
-    const progressContainer = document.getElementById('preview-progress-container') || document.getElementById('progress-container');
-    const progressBar = document.getElementById('preview-progress-bar') || document.getElementById('progress-bar');
-    const progressPct = document.getElementById('preview-progress-pct') || document.getElementById('progress-percentage');
-    const progressLabel = document.getElementById('preview-progress-text') || document.getElementById('progress-node-label');
-    const statusHeading = document.getElementById('preview-status-heading') || document.getElementById('preview-status-pill');
+        const btnInterrupt = document.getElementById('btn-interrupt');
+        const genText = document.getElementById('generate-text');
+        if (genText) genText.innerText = 'Queuing...';
+        if (btnInterrupt) btnInterrupt.classList.remove('hidden');
 
-    if (progressContainer) progressContainer.classList.remove('hidden');
-    if (progressBar) progressBar.style.width = '0%';
-    if (progressPct) progressPct.innerText = '0%';
-    if (progressLabel) progressLabel.innerText = 'Contacting ComfyUI...';
-    if (statusHeading) statusHeading.innerText = 'Queuing';
+        const progressContainer = document.getElementById('preview-progress-container') || document.getElementById('progress-container');
+        const progressBar = document.getElementById('preview-progress-bar') || document.getElementById('progress-bar');
+        const progressPct = document.getElementById('preview-progress-pct') || document.getElementById('progress-percentage');
+        const progressLabel = document.getElementById('preview-progress-text') || document.getElementById('progress-node-label');
+        const statusHeading = document.getElementById('preview-status-heading') || document.getElementById('preview-status-pill');
+
+        if (progressContainer) progressContainer.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressPct) progressPct.innerText = '0%';
+        if (progressLabel) progressLabel.innerText = 'Contacting ComfyUI...';
+        if (statusHeading) statusHeading.innerText = 'Queuing';
+
+        // Show generation summoning animation overlay
+        const loader = document.getElementById('preview-generating-loader');
+        if (loader) loader.classList.remove('hidden');
+        const loaderPct = document.getElementById('loader-pct-badge');
+        if (loaderPct) loaderPct.innerText = '0%';
+        const loaderNode = document.getElementById('loader-node-status');
+        if (loaderNode) loaderNode.innerText = 'Connecting to ComfyUI...';
+        const loaderQueue = document.getElementById('loader-queue-status');
+        if (loaderQueue) loaderQueue.innerText = `Batch: 1 / ${batchCount}`;
+    } else {
+        showToast(`(★ω★) 🚀 Adding +${batchCount} prompt(s) to queue...`, 'info');
+    }
 
     try {
         const res = await fetch('/api/generate', {
@@ -1109,14 +1244,38 @@ async function handleGenerate() {
         }
 
         const data = await res.json();
-        if (genText) genText.innerText = 'Generating...';
 
-        if (data.resolved_params && data.resolved_params.seed && seedInputEl) {
+        // Track prompt IDs
+        const queuedCount = data.batch_count || 1;
+        state.queuedTotalCount += queuedCount;
+
+        if (data.prompts && Array.isArray(data.prompts)) {
+            data.prompts.forEach(p => {
+                if (p.prompt_id) state.activePromptIds.add(p.prompt_id);
+            });
+        } else if (data.prompt_id) {
+            state.activePromptIds.add(data.prompt_id);
+        }
+
+        updateQueueStatusDisplay();
+
+        const genText = document.getElementById('generate-text');
+        if (genText) genText.innerText = `(≧◡≦) ➕ Queue +${batchCount} More!`;
+
+        if (isAppending) {
+            showToast(`(ﾉ◕ヮ◕)ﾉ*:･ﾟ Added ${queuedCount} to queue! Total queued: ${state.activePromptIds.size}`, 'success');
+        }
+
+        if (data.resolved_params && data.resolved_params.seed && seedInputEl && !isAppending) {
             seedInputEl.value = data.resolved_params.seed;
         }
     } catch (e) {
-        finishGeneration();
+        if (!isAppending) {
+            finishGeneration();
+        }
         showToast(e.message, 'error');
+        const statusHeading = document.getElementById('preview-status-heading') || document.getElementById('preview-status-pill');
+        const progressLabel = document.getElementById('preview-progress-text') || document.getElementById('progress-node-label');
         if (statusHeading) statusHeading.innerText = 'Failed';
         if (progressLabel) progressLabel.innerText = `Error: ${e.message}`;
     }
@@ -1124,8 +1283,10 @@ async function handleGenerate() {
 
 async function handleInterrupt() {
     try {
+        state.activePromptIds.clear();
         await fetch('/api/interrupt', { method: 'POST' });
-        showToast('Cancel request sent to ComfyUI', 'info');
+        finishGeneration();
+        showToast('(・_・;) 🛑 Generation canceled and queue cleared', 'info');
     } catch (e) {
         showToast('Failed to interrupt ComfyUI', 'error');
     }
@@ -1145,15 +1306,22 @@ function startGenerationTimer() {
 
 function finishGeneration() {
     state.isGenerating = false;
+    state.activePromptIds.clear();
     if (state.generationTimerInterval) clearInterval(state.generationTimerInterval);
 
     const btnGen = document.getElementById('btn-generate');
     const btnInterrupt = document.getElementById('btn-interrupt');
-    const genText = document.getElementById('generate-text');
-
     if (btnGen) btnGen.disabled = false;
-    if (genText) genText.innerText = '(★ω★) 🚀 Spark Generation!';
     if (btnInterrupt) btnInterrupt.classList.add('hidden');
+
+    // Hide anime generation loader
+    const loader = document.getElementById('preview-generating-loader');
+    if (loader) loader.classList.add('hidden');
+
+    const badge = document.getElementById('batch-queue-badge');
+    if (badge) badge.classList.add('hidden');
+
+    updateBatchCountUI();
 }
 
 function displayGeneratedImage(relative_path, params = {}) {
@@ -1979,9 +2147,9 @@ document.addEventListener('keydown', (e) => {
         }
     }
 
-    // Ctrl+Enter or Cmd+Enter to generate
+    // Ctrl+Enter or Cmd+Enter to generate or queue
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        if (state.activeTab === 'generator' && !state.isGenerating) {
+        if (state.activeTab === 'generator') {
             handleGenerate();
         }
     }
@@ -2012,6 +2180,7 @@ window.addEventListener('DOMContentLoaded', () => {
     preloadTopTags();
     initTagAutocomplete();
     initReelSwipe();
+    updateBatchCountUI();
 
     setInterval(checkComfyStatus, 10000);
 });

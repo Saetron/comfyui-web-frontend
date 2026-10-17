@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import random
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
@@ -35,6 +37,7 @@ class GenerateRequest(BaseModel):
     negative_prompt: str = Field("", description="Negative prompt text")
     seed: Optional[int] = Field(None, description="Seed value")
     randomize_seed: bool = Field(True, description="Whether to randomize seed")
+    batch_count: int = Field(1, ge=1, le=100, description="Number of images to queue in batch")
     client_id: str = Field(..., description="Unique client identifier")
     steps: Optional[int] = Field(None, ge=1, le=150)
     cfg: Optional[float] = Field(None, ge=0.0, le=30.0)
@@ -301,19 +304,24 @@ async def upload_workflow(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Failed to import workflow: {e}")
 
 
-async def _run_generation_tracker(client_id: str, prompt_id: str, resolved_params: Dict[str, Any]):
+async def _run_generation_tracker(
+    browser_client_id: str,
+    prompt_client_id: str,
+    prompt_id: str,
+    resolved_params: Dict[str, Any],
+):
     """Background task listening to ComfyUI WebSocket and relaying to browser client."""
     try:
-        async for event in comfy_service.listen_prompt_progress(client_id, prompt_id):
+        async for event in comfy_service.listen_prompt_progress(prompt_client_id, prompt_id):
             # Send event to browser client
-            await ws_manager.send_to_client(client_id, {
+            await ws_manager.send_to_client(browser_client_id, {
                 "channel": "generation",
                 "data": event,
                 "resolved_params": resolved_params,
             })
     except Exception as e:
-        logger.error(f"Error in generation tracker: {e}")
-        await ws_manager.send_to_client(client_id, {
+        logger.error(f"Error in generation tracker for prompt {prompt_id}: {e}")
+        await ws_manager.send_to_client(browser_client_id, {
             "channel": "generation",
             "data": {"type": "error", "error": str(e), "prompt_id": prompt_id},
         })
@@ -323,7 +331,7 @@ async def _run_generation_tracker(client_id: str, prompt_id: str, resolved_param
 async def generate_image(req: GenerateRequest):
     """
     Inject form parameters into workflow JSON, send to ComfyUI,
-    and initiate progress relaying over WebSocket.
+    and initiate progress relaying over WebSocket. Supports batch queuing.
     """
     # 1. Load active workflow template
     workflow = comfy_service.load_workflow_template()
@@ -340,32 +348,62 @@ async def generate_image(req: GenerateRequest):
         "scheduler": req.scheduler,
     }
 
-    # 2. Inject parameters
-    prompt_graph, resolved_params = comfy_service.inject_workflow(
-        workflow=workflow,
-        positive_prompt=req.positive_prompt,
-        negative_prompt=req.negative_prompt,
-        seed=req.seed,
-        randomize_seed=req.randomize_seed,
-        extra_params=extra,
-    )
+    batch_count = max(1, min(req.batch_count, 100))
+    queued_prompts = []
+    base_seed = req.seed
 
-    # 3. Post to ComfyUI
-    try:
-        res = await comfy_service.queue_prompt(prompt_graph, client_id=req.client_id)
-        prompt_id = res.get("prompt_id")
-        if not prompt_id:
-            raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to queue prompt to ComfyUI: {e}")
+    for i in range(batch_count):
+        if req.randomize_seed:
+            current_seed = None
+            randomize = True
+        else:
+            if base_seed is not None:
+                current_seed = (base_seed + i) % (2**32)
+            else:
+                current_seed = random.randint(1, 2**32 - 1)
+                base_seed = current_seed
+            randomize = False
 
-    # 4. Spawn background progress listener for this client and prompt
-    asyncio.create_task(_run_generation_tracker(req.client_id, prompt_id, resolved_params))
+        prompt_graph, resolved_params = comfy_service.inject_workflow(
+            workflow=workflow,
+            positive_prompt=req.positive_prompt,
+            negative_prompt=req.negative_prompt,
+            seed=current_seed,
+            randomize_seed=randomize,
+            extra_params=extra,
+        )
+
+        prompt_client_id = f"{req.client_id}_{uuid.uuid4().hex[:6]}"
+
+        try:
+            res = await comfy_service.queue_prompt(prompt_graph, client_id=prompt_client_id)
+            prompt_id = res.get("prompt_id")
+            if not prompt_id:
+                raise RuntimeError(f"ComfyUI did not return prompt_id: {res}")
+
+            queued_prompts.append({
+                "prompt_id": prompt_id,
+                "resolved_params": resolved_params,
+                "queue_number": res.get("number"),
+                "batch_index": i + 1,
+                "batch_total": batch_count,
+            })
+
+            # Spawn background progress listener for this client and prompt
+            asyncio.create_task(_run_generation_tracker(req.client_id, prompt_client_id, prompt_id, resolved_params))
+        except Exception as e:
+            if not queued_prompts:
+                raise HTTPException(status_code=502, detail=f"Failed to queue prompt to ComfyUI: {e}")
+            logger.warning(f"Error queueing batch item {i+1}/{batch_count}: {e}")
+            break
 
     return {
-        "prompt_id": prompt_id,
-        "resolved_params": resolved_params,
-        "queue_number": res.get("number"),
+        "status": "queued",
+        "batch_count": len(queued_prompts),
+        "prompts": queued_prompts,
+        "prompt_id": queued_prompts[0]["prompt_id"] if queued_prompts else None,
+        "resolved_params": queued_prompts[0]["resolved_params"] if queued_prompts else {},
+        "queue_number": queued_prompts[0].get("queue_number") if queued_prompts else None,
     }
 
 

@@ -294,6 +294,31 @@
                             </div>
                         </div>
 
+                        <!-- Batch Count & Queue Selector -->
+                        <div class="pt-2">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="text-xs font-bold text-pink-300 flex items-center space-x-1.5">
+                                    <span>📦</span>
+                                    <span>Batch Queue (バッチ生成)</span>
+                                    <span id="batch-queue-badge" class="hidden text-[10px] bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded-full font-mono border border-pink-500/30 font-bold">1 queued</span>
+                                </label>
+                                <span class="text-[11px] text-zinc-400">Queue multiple variations</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="flex space-x-1 flex-1">
+                                    <button type="button" onclick="setBatchCount(1)" id="batch-btn-1" class="batch-preset-btn active flex-1 py-1.5 rounded-xl text-xs font-extrabold border border-pink-500/40 bg-pink-500/20 text-pink-200 transition-all">1x</button>
+                                    <button type="button" onclick="setBatchCount(2)" id="batch-btn-2" class="batch-preset-btn flex-1 py-1.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-zinc-300 hover:bg-pink-500/10 hover:border-pink-500/30 transition-all">2x</button>
+                                    <button type="button" onclick="setBatchCount(4)" id="batch-btn-4" class="batch-preset-btn flex-1 py-1.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-zinc-300 hover:bg-pink-500/10 hover:border-pink-500/30 transition-all">4x</button>
+                                    <button type="button" onclick="setBatchCount(8)" id="batch-btn-8" class="batch-preset-btn flex-1 py-1.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-zinc-300 hover:bg-pink-500/10 hover:border-pink-500/30 transition-all">8x</button>
+                                </div>
+                                <div class="flex items-center bg-[#0d0e1c] border border-pink-500/30 rounded-xl px-1.5 py-0.5 space-x-1">
+                                    <button type="button" onclick="adjustBatchCount(-1)" class="w-6 h-6 flex items-center justify-center text-pink-300 hover:text-white font-bold rounded hover:bg-pink-500/20 transition-colors">-</button>
+                                    <input type="number" id="batch-count-input" min="1" max="50" value="1" onchange="onBatchInputChange(this.value)" class="w-10 bg-transparent text-center text-xs font-bold font-mono text-pink-200 focus:outline-none">
+                                    <button type="button" onclick="adjustBatchCount(1)" class="w-6 h-6 flex items-center justify-center text-pink-300 hover:text-white font-bold rounded hover:bg-pink-500/20 transition-colors">+</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Spark Generation Action Buttons -->
                         <div class="pt-2 flex items-center space-x-3">
                             <button id="btn-generate" type="button" onclick="handleGenerate()"
@@ -337,6 +362,63 @@
                         <!-- Canvas Image / Placeholder Area -->
                         <div class="flex-1 mt-4 relative flex items-center justify-center bg-black/40 rounded-2xl border border-pink-500/20 overflow-hidden min-h-[350px]">
                             
+                            <!-- Generation Summoning Animation Overlay -->
+                            <div id="preview-generating-loader" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#070814]/85 backdrop-blur-md transition-all duration-300 select-none">
+                                <!-- Laser Scanner Sweep Line -->
+                                <div class="anime-scanner-line"></div>
+                                
+                                <!-- Magic Circle Container -->
+                                <div class="relative w-48 h-48 sm:w-56 sm:h-56 flex items-center justify-center pointer-events-none">
+                                    <!-- Outer Runes Ring (clockwise spin) -->
+                                    <svg class="anime-circle-outer absolute inset-0 w-full h-full text-pink-500/40" viewBox="0 0 200 200" fill="none">
+                                        <circle cx="100" cy="100" r="92" stroke="currentColor" stroke-width="2" stroke-dasharray="8 6" />
+                                        <circle cx="100" cy="100" r="82" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 4" />
+                                        <!-- Celestial Rune Marks -->
+                                        <polygon points="100,10 108,24 92,24" fill="currentColor" />
+                                        <polygon points="100,190 108,176 92,176" fill="currentColor" />
+                                        <polygon points="10,100 24,108 24,92" fill="currentColor" />
+                                        <polygon points="190,100 176,108 176,92" fill="currentColor" />
+                                        <polygon points="36,36 48,42 42,48" fill="currentColor" />
+                                        <polygon points="164,36 158,48 152,42" fill="currentColor" />
+                                        <polygon points="36,164 42,152 48,158" fill="currentColor" />
+                                        <polygon points="164,164 152,158 158,152" fill="currentColor" />
+                                    </svg>
+
+                                    <!-- Middle Pentagram / Hexagram Ring (counter-clockwise spin) -->
+                                    <svg class="anime-circle-inner absolute inset-4 w-[calc(100%-2rem)] h-[calc(100%-2rem)] text-purple-400/50" viewBox="0 0 160 160" fill="none">
+                                        <circle cx="80" cy="80" r="70" stroke="currentColor" stroke-width="1.5" />
+                                        <!-- 8-Point Star Geometry -->
+                                        <polygon points="80,14 126,126 14,56 146,56 34,126" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.6" />
+                                        <circle cx="80" cy="80" r="32" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" />
+                                    </svg>
+
+                                    <!-- Center Core Sparkle & Aura -->
+                                    <div class="anime-core-pulse relative z-10 w-24 h-24 rounded-full bg-gradient-to-tr from-pink-500/30 via-purple-500/20 to-cyan-400/30 border border-pink-400/60 shadow-[0_0_35px_rgba(255,94,152,0.6)] flex flex-col items-center justify-center">
+                                        <span class="text-3xl animate-bounce">✨</span>
+                                        <span id="loader-pct-badge" class="font-mono text-xs font-extrabold text-pink-200 mt-0.5">0%</span>
+                                    </div>
+
+                                    <!-- Floating Sparkle Particles -->
+                                    <span class="anime-float-particle p1">🌸</span>
+                                    <span class="anime-float-particle p2">⭐</span>
+                                    <span class="anime-float-particle p3">✨</span>
+                                    <span class="anime-float-particle p4">💫</span>
+                                </div>
+
+                                <!-- Summoning Status Kaomoji & Info -->
+                                <div class="mt-4 text-center px-4 space-y-1.5 pointer-events-none">
+                                    <div id="loader-kaomoji" class="text-sm font-extrabold text-pink-300 anime-kaomoji-glow">
+                                        (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧ Summoning Artwork...
+                                    </div>
+                                    <div id="loader-node-status" class="text-xs text-zinc-300 font-medium">
+                                        Connecting to ComfyUI...
+                                    </div>
+                                    <div id="loader-queue-status" class="text-[11px] font-mono text-purple-300 font-semibold">
+                                        Batch: 1 / 1
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Placeholder -->
                             <div id="preview-placeholder" class="text-center p-6 space-y-3">
                                 <div class="w-20 h-20 mx-auto rounded-3xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-3xl shadow-inner">

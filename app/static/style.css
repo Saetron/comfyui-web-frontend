@@ -369,3 +369,119 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .reel-swipe-area:active {
     cursor: grabbing;
 }
+
+/* ============================================================
+   Anime Generation Summoning Animation & Batch Queue Styles
+   ============================================================ */
+
+/* Laser Scanner Sweep Line */
+.anime-scanner-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent 0%, #ff5e98 25%, #38bdf8 50%, #ec4899 75%, transparent 100%);
+    box-shadow: 0 0 16px 3px rgba(255, 94, 152, 0.75), 0 0 32px 6px rgba(56, 189, 248, 0.5);
+    animation: animeScanSweep 2.8s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 25;
+}
+
+@keyframes animeScanSweep {
+    0% { top: 3%; opacity: 0.35; }
+    50% { opacity: 1; }
+    100% { top: 95%; opacity: 0.35; }
+}
+
+/* Magic Circle Spinning Runes */
+.anime-circle-outer {
+    animation: animeRotateClockwise 20s linear infinite;
+    filter: drop-shadow(0 0 10px rgba(255, 94, 152, 0.55));
+}
+
+.anime-circle-inner {
+    animation: animeRotateCounterClockwise 13s linear infinite;
+    filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.55));
+}
+
+@keyframes animeRotateClockwise {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes animeRotateCounterClockwise {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+}
+
+/* Pulsing Core Aura */
+.anime-core-pulse {
+    animation: animeCorePulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes animeCorePulse {
+    0% {
+        transform: scale(0.93);
+        box-shadow: 0 0 20px rgba(255, 94, 152, 0.45), 0 0 35px rgba(168, 85, 247, 0.25);
+    }
+    100% {
+        transform: scale(1.07);
+        box-shadow: 0 0 45px rgba(255, 94, 152, 0.85), 0 0 65px rgba(56, 189, 248, 0.55);
+    }
+}
+
+/* Floating Magical Decals */
+.anime-float-particle {
+    position: absolute;
+    font-size: 15px;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+}
+.anime-float-particle.p1 {
+    top: 15%; left: 18%;
+    animation: floatParticle 3.8s ease-in-out infinite;
+}
+.anime-float-particle.p2 {
+    top: 72%; left: 20%;
+    animation: floatParticle 3.4s ease-in-out 0.8s infinite;
+}
+.anime-float-particle.p3 {
+    top: 18%; right: 18%;
+    animation: floatParticle 4.2s ease-in-out 0.4s infinite;
+}
+.anime-float-particle.p4 {
+    top: 70%; right: 20%;
+    animation: floatParticle 3.6s ease-in-out 1.2s infinite;
+}
+
+@keyframes floatParticle {
+    0% { transform: translateY(10px) scale(0.7) rotate(0deg); opacity: 0; }
+    50% { transform: translateY(-8px) scale(1.25) rotate(18deg); opacity: 0.95; }
+    100% { transform: translateY(-26px) scale(0.7) rotate(36deg); opacity: 0; }
+}
+
+/* Kaomoji Pulsing Glow */
+.anime-kaomoji-glow {
+    text-shadow: 0 0 14px rgba(255, 94, 152, 0.8), 0 0 28px rgba(168, 85, 247, 0.5);
+    animation: animeKaomojiPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes animeKaomojiPulse {
+    0% { transform: scale(0.97); opacity: 0.92; }
+    100% { transform: scale(1.03); opacity: 1; }
+}
+
+/* Batch Preset Buttons */
+.batch-preset-btn {
+    user-select: none;
+    transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.batch-preset-btn.active {
+    background: rgba(255, 94, 152, 0.28) !important;
+    border-color: rgba(255, 94, 152, 0.65) !important;
+    color: #ffd1e3 !important;
+    box-shadow: 0 0 14px rgba(255, 94, 152, 0.4);
+}
+
