@@ -1086,18 +1086,18 @@ function createGalleryCard(item, index) {
     const card = document.createElement('div');
     const clean = cleanRelPath(item.relative_path);
     card.id = `gallery-card-${sanitizeId(clean)}`;
-    card.className = 'group relative aspect-square bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800/80 hover:border-brand-500/80 transition-all duration-200 cursor-pointer shadow-sm hover:shadow-xl hover:shadow-brand-500/10';
+    card.className = 'group relative aspect-square bg-[#0c0d1b] rounded-2xl overflow-hidden border-2 border-pink-500/25 hover:border-pink-400 hover:shadow-xl hover:shadow-pink-500/25 transition-all duration-200 cursor-pointer hover:-translate-y-1';
 
     const thumbUrl = `/api/thumbnails/${encodeURIComponent(clean)}`;
 
     card.innerHTML = `
         <img src="${thumbUrl}" alt="${item.filename}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
         
-        <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-2.5 flex flex-col justify-end">
-            <span class="text-xs font-semibold text-white truncate drop-shadow">${item.filename}</span>
-            <div class="flex items-center justify-between text-[10px] text-zinc-300 mt-1">
-                <span>${item.file_size_human}</span>
-                <span class="bg-black/50 px-1.5 py-0.5 rounded text-zinc-300">View</span>
+        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
+            <span class="text-xs font-bold text-pink-100 truncate drop-shadow">${item.filename}</span>
+            <div class="flex items-center justify-between text-[10px] text-pink-300 mt-1">
+                <span class="font-mono">${item.file_size_human}</span>
+                <span class="px-2 py-0.5 rounded-full bg-pink-500/30 text-white font-bold border border-pink-500/40">🌸 View</span>
             </div>
         </div>
     `;
@@ -1157,45 +1157,65 @@ function openImageModalByPath(relativePath) {
 
 async function openImageModalByIndex(index, fallbackPath = null) {
     const modal = document.getElementById('image-modal');
+    if (!modal) return;
     modal.classList.remove('hidden');
 
-    if (state.galleryImages.length > 0) {
+    if (state.galleryImages && state.galleryImages.length > 0) {
         if (index < 0) index = state.galleryImages.length - 1;
         if (index >= state.galleryImages.length) index = 0;
         state.currentModalIndex = index;
     }
 
-    const item = state.galleryImages[state.currentModalIndex] || {};
+    const item = (state.galleryImages && state.galleryImages[state.currentModalIndex]) || {};
     const relativePath = cleanRelPath(item.relative_path || fallbackPath);
 
-    document.getElementById('modal-nav-indicator').innerText = state.galleryImages.length > 0 
-        ? `${state.currentModalIndex + 1} / ${state.galleryImages.length}`
-        : '1 / 1';
+    const navInd = document.getElementById('modal-nav-indicator') || document.getElementById('modal-img-counter');
+    if (navInd) {
+        navInd.innerText = (state.galleryImages && state.galleryImages.length > 0)
+            ? `${state.currentModalIndex + 1} / ${state.galleryImages.length}`
+            : '1 / 1';
+    }
 
     const modalImg = document.getElementById('modal-img');
     const modalFilename = document.getElementById('modal-filename');
-    const modalDate = document.getElementById('modal-date');
+    const modalDate = document.getElementById('modal-date') || document.getElementById('modal-filesize');
     const modalDim = document.getElementById('modal-img-dim');
     const modalDownload = document.getElementById('modal-download-link');
 
-    modalImg.src = '';
-    modalFilename.innerText = relativePath.split('/').pop() || item.filename || 'Image Details';
-    modalDate.innerText = 'Loading metadata...';
-    modalDim.innerText = '';
-    document.getElementById('modal-pos-tags').innerHTML = '';
-    document.getElementById('modal-pos-prompt').innerText = 'Loading...';
-    document.getElementById('modal-neg-prompt').innerText = 'Loading...';
-    document.getElementById('modal-seed').innerText = '-';
-    document.getElementById('modal-steps').innerText = '-';
-    document.getElementById('modal-cfg').innerText = '-';
-    document.getElementById('modal-sampler').innerText = '-';
-    document.getElementById('modal-model').innerText = '-';
-    document.getElementById('modal-raw-json').innerText = '{}';
+    const cleanFilename = relativePath.split('/').pop() || item.filename || 'image.png';
+
+    if (modalFilename) modalFilename.innerText = cleanFilename;
+    if (modalDate) modalDate.innerText = 'Loading metadata...';
+    if (modalDim) modalDim.innerText = '';
+
+    const posTagsEl = document.getElementById('modal-pos-tags');
+    const posPromptEl = document.getElementById('modal-pos-prompt') || document.getElementById('modal-positive-prompt');
+    const negPromptEl = document.getElementById('modal-neg-prompt') || document.getElementById('modal-negative-prompt');
+
+    if (posTagsEl) posTagsEl.innerHTML = '';
+    if (posPromptEl) posPromptEl.innerText = 'Loading...';
+    if (negPromptEl) negPromptEl.innerText = 'Loading...';
+
+    const seedEl = document.getElementById('modal-seed');
+    const stepsEl = document.getElementById('modal-steps');
+    const cfgEl = document.getElementById('modal-cfg');
+    const samplerEl = document.getElementById('modal-sampler');
+    const modelEl = document.getElementById('modal-model');
+    const rawJsonEl = document.getElementById('modal-raw-json');
+
+    if (seedEl) seedEl.innerText = '-';
+    if (stepsEl) stepsEl.innerText = '-';
+    if (cfgEl) cfgEl.innerText = '-';
+    if (samplerEl) samplerEl.innerText = '-';
+    if (modelEl) modelEl.innerText = '-';
+    if (rawJsonEl) rawJsonEl.innerText = '{}';
 
     const fullUrl = `/api/images/${encodeURIComponent(relativePath)}`;
-    modalImg.src = fullUrl;
-    modalDownload.href = fullUrl;
-    modalDownload.download = relativePath.split('/').pop();
+    if (modalImg) modalImg.src = fullUrl;
+    if (modalDownload) {
+        modalDownload.href = fullUrl;
+        modalDownload.download = cleanFilename;
+    }
 
     try {
         const res = await fetch(`/api/images/${encodeURIComponent(relativePath)}/metadata`);
@@ -1204,49 +1224,76 @@ async function openImageModalByIndex(index, fallbackPath = null) {
         meta.relative_path = cleanRelPath(meta.relative_path);
         state.currentModalImage = meta;
 
-        modalFilename.innerText = meta.filename;
-        modalDate.innerText = `${meta.modified_at ? new Date(meta.modified_at).toLocaleString() : ''} · ${meta.file_size_human}`;
-        modalDim.innerText = meta.dimensions || '';
+        if (modalFilename) modalFilename.innerText = meta.filename || cleanFilename;
+        if (modalDate) modalDate.innerText = `${meta.modified_at ? new Date(meta.modified_at).toLocaleString() : ''} · ${meta.file_size_human || ''}`;
+        if (modalDim) modalDim.innerText = meta.dimensions || '';
 
         const p = meta.parsed || {};
-        document.getElementById('modal-pos-prompt').innerText = p.positive_prompt || '(None found)';
-        document.getElementById('modal-neg-prompt').innerText = p.negative_prompt || '(None)';
-        document.getElementById('modal-seed').innerText = p.seed !== undefined && p.seed !== null ? p.seed : '-';
-        document.getElementById('modal-steps').innerText = p.steps || '-';
-        document.getElementById('modal-cfg').innerText = p.cfg || '-';
-        document.getElementById('modal-sampler').innerText = p.sampler_name ? `${p.sampler_name} / ${p.scheduler || 'normal'}` : '-';
-        document.getElementById('modal-model').innerText = p.model || '(Standard)';
+        if (posPromptEl) posPromptEl.innerText = p.positive_prompt || '(None found)';
+        if (negPromptEl) negPromptEl.innerText = p.negative_prompt || '(None)';
+        if (seedEl) seedEl.innerText = p.seed !== undefined && p.seed !== null ? p.seed : '-';
+        if (stepsEl) stepsEl.innerText = p.steps || '-';
+        if (cfgEl) cfgEl.innerText = p.cfg || '-';
+        if (samplerEl) samplerEl.innerText = p.sampler_name ? `${p.sampler_name} / ${p.scheduler || 'normal'}` : '-';
+        if (modelEl) modelEl.innerText = p.model || '(Standard)';
 
-        document.getElementById('modal-raw-json').innerText = JSON.stringify(meta.raw || {}, null, 2);
+        if (rawJsonEl) rawJsonEl.innerText = JSON.stringify(meta.raw || {}, null, 2);
 
         // Render clickable tag pills
         renderModalPromptTags(p.positive_prompt);
 
     } catch (e) {
         console.warn('Metadata fetch error:', e);
-        modalDate.innerText = 'No metadata embedded';
-        document.getElementById('modal-pos-prompt').innerText = '(No metadata chunk found)';
+        if (modalDate) modalDate.innerText = 'No metadata embedded';
+        if (posPromptEl) posPromptEl.innerText = '(No metadata chunk found)';
     }
 }
 
 function renderModalPromptTags(promptText) {
     const container = document.getElementById('modal-pos-tags');
+    if (!container) return;
     container.innerHTML = '';
     if (!promptText) return;
 
     const tags = promptText.split(',').map(s => s.trim()).filter(Boolean);
-    tags.slice(0, 40).forEach(t => {
+    tags.slice(0, 45).forEach(t => {
         const pill = document.createElement('button');
         pill.type = 'button';
-        pill.className = 'px-2 py-0.5 rounded text-[10px] bg-zinc-900 hover:bg-brand-600 text-zinc-300 hover:text-white border border-zinc-800 transition-colors';
+        pill.className = 'tag-pill-btn bg-white/5 hover:bg-pink-500/25 text-pink-200 border border-pink-500/30 text-[10px]';
         pill.innerText = t;
         pill.title = 'Click to copy tag';
         pill.onclick = () => {
             navigator.clipboard.writeText(t);
-            showToast(`Copied tag: ${t}`, 'info');
+            showToast(`(づ｡◕‿‿◕｡)づ Copied tag: ${t}`, 'info');
         };
         container.appendChild(pill);
     });
+}
+
+function downloadModalImage() {
+    const item = state.currentModalImage || (state.galleryImages && state.galleryImages[state.currentModalIndex]);
+    if (!item) return;
+    const path = cleanRelPath(item.relative_path || item.filename);
+    const link = document.createElement('a');
+    link.href = `/api/images/${encodeURIComponent(path)}`;
+    link.download = item.filename || path.split('/').pop() || 'comfy_image.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+function copyModalField(field) {
+    if (!state.currentModalImage) return;
+    const p = state.currentModalImage.parsed || {};
+    const text = field === 'positive_prompt' ? p.positive_prompt : p.negative_prompt;
+    if (text) {
+        navigator.clipboard.writeText(text);
+        showToast('Copied prompt to clipboard! 📋✨', 'info');
+    }
+}
+
+function loadModalPromptToGenerator() {
+    loadModalPromptIntoGenerator();
 }
 
 function navigateModalImage(direction) {
@@ -1263,31 +1310,30 @@ function closeImageModal() {
 function toggleModalRawJson() {
     const container = document.getElementById('modal-raw-container');
     const arrow = document.getElementById('raw-toggle-arrow');
+    if (!container) return;
     if (container.classList.contains('hidden')) {
         container.classList.remove('hidden');
-        arrow.innerText = '▲';
+        if (arrow) arrow.innerText = '▲';
     } else {
         container.classList.add('hidden');
-        arrow.innerText = '▼';
+        if (arrow) arrow.innerText = '▼';
     }
 }
 
 function copyModalPositive() {
-    const text = document.getElementById('modal-pos-prompt').innerText;
-    navigator.clipboard.writeText(text);
-    showToast('Positive prompt copied to clipboard', 'info');
+    copyModalField('positive_prompt');
 }
 
 function copyModalNegative() {
-    const text = document.getElementById('modal-neg-prompt').innerText;
-    navigator.clipboard.writeText(text);
-    showToast('Negative prompt copied to clipboard', 'info');
+    copyModalField('negative_prompt');
 }
 
 function copyModalRawJson() {
-    const text = document.getElementById('modal-raw-json').innerText;
-    navigator.clipboard.writeText(text);
-    showToast('Raw JSON copied to clipboard', 'info');
+    const el = document.getElementById('modal-raw-json');
+    if (el && el.innerText) {
+        navigator.clipboard.writeText(el.innerText);
+        showToast('Raw JSON copied to clipboard', 'info');
+    }
 }
 
 function loadModalPromptIntoGenerator() {
@@ -1317,11 +1363,12 @@ function loadModalPromptIntoGenerator() {
 
     closeImageModal();
     switchTab('generator');
-    showToast('Loaded parameters into Generator', 'success');
+    showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loaded into Generator! ✨', 'success');
 }
 
+
 // ==========================================
-// TIKTOK STYLE FULLSCREEN RANDOM MODE
+// REEL MODE FULLSCREEN RANDOM VIEWER & SWIPING
 // ==========================================
 function openTikTokMode() {
     if (state.galleryImages.length === 0) {
@@ -1334,12 +1381,13 @@ function openTikTokMode() {
     state.tiktokIndex = 0;
 
     const modal = document.getElementById('tiktok-modal');
-    modal.classList.remove('hidden');
+    if (modal) modal.classList.remove('hidden');
 
-    displayTikTokItem(0);
+    displayTikTokItem(0, 'none');
 }
+const openReelMode = openTikTokMode;
 
-async function displayTikTokItem(index) {
+async function displayTikTokItem(index, direction = 'up') {
     if (state.tiktokQueue.length === 0) return;
     if (index < 0) index = state.tiktokQueue.length - 1;
     if (index >= state.tiktokQueue.length) index = 0;
@@ -1350,14 +1398,23 @@ async function displayTikTokItem(index) {
     state.currentTikTokImage = item;
 
     const img = document.getElementById('tiktok-img');
-    img.classList.remove('tiktok-slide-up');
-    void img.offsetWidth; // Trigger reflow for animation
-    img.src = `/api/images/${encodeURIComponent(clean)}`;
-    img.classList.add('tiktok-slide-up');
+    if (img) {
+        img.classList.remove('reel-slide-up', 'reel-slide-down', 'tiktok-slide-up');
+        void img.offsetWidth; // Trigger reflow for animation
+        img.src = `/api/images/${encodeURIComponent(clean)}`;
+        if (direction === 'down') {
+            img.classList.add('reel-slide-down');
+        } else if (direction === 'up') {
+            img.classList.add('reel-slide-up');
+        }
+    }
 
-    document.getElementById('tiktok-filename').innerText = item.filename;
-    document.getElementById('tiktok-index-counter').innerText = `${index + 1} / ${state.tiktokQueue.length}`;
-    document.getElementById('tiktok-meta-badge').innerText = item.file_size_human;
+    const fn = document.getElementById('tiktok-filename');
+    if (fn) fn.innerText = item.filename;
+    const cnt = document.getElementById('tiktok-index-counter');
+    if (cnt) cnt.innerText = `${index + 1} / ${state.tiktokQueue.length}`;
+    const badge = document.getElementById('tiktok-meta-badge');
+    if (badge) badge.innerText = item.file_size_human;
 
     // Fetch embedded prompt info
     try {
@@ -1366,39 +1423,100 @@ async function displayTikTokItem(index) {
             const meta = await res.json();
             state.currentTikTokImage = meta;
             const p = meta.parsed || {};
-            document.getElementById('tiktok-prompt-text').innerText = p.positive_prompt || '(No prompt embedded)';
-            document.getElementById('tiktok-meta-badge').innerText = `${p.seed ? 'Seed: ' + p.seed + ' · ' : ''}${meta.file_size_human}`;
+            const prText = document.getElementById('tiktok-prompt-text');
+            if (prText) prText.innerText = p.positive_prompt || '(No prompt embedded)';
+            if (badge) badge.innerText = `${p.seed ? 'Seed: ' + p.seed + ' · ' : ''}${meta.file_size_human}`;
             
-            // Render pills
-            const tagsCont = document.getElementById('tiktok-prompt-tags');
-            tagsCont.innerHTML = '';
-            if (p.positive_prompt) {
-                p.positive_prompt.split(',').slice(0, 15).forEach(t => {
-                    const pill = document.createElement('span');
-                    pill.className = 'px-1.5 py-0.5 rounded text-[10px] bg-zinc-800/80 text-zinc-300';
-                    pill.innerText = t.trim();
-                    tagsCont.appendChild(pill);
-                });
+            // Render interactive tags for quick copying
+            const tagContainer = document.getElementById('tiktok-prompt-tags');
+            if (tagContainer) {
+                tagContainer.innerHTML = '';
+                if (p.positive_prompt) {
+                    const tags = p.positive_prompt.split(',').map(s => s.trim()).filter(Boolean);
+                    tags.slice(0, 15).forEach(t => {
+                        const pill = document.createElement('span');
+                        pill.className = 'tag-pill-btn bg-pink-500/20 text-pink-200 border border-pink-500/30 text-[10px] cursor-pointer hover:bg-pink-500/40';
+                        pill.innerText = t;
+                        pill.onclick = () => {
+                            navigator.clipboard.writeText(t);
+                            showToast(`(づ｡◕‿‿◕｡)づ Copied tag: ${t}`, 'info');
+                        };
+                        tagContainer.appendChild(pill);
+                    });
+                }
             }
         }
     } catch (e) {
-        document.getElementById('tiktok-prompt-text').innerText = '';
+        const prText = document.getElementById('tiktok-prompt-text');
+        if (prText) prText.innerText = '';
     }
 }
 
-function nextTikTokImage() {
-    displayTikTokItem(state.tiktokIndex + 1);
+function nextTikTokImage(direction = 'up') {
+    if (state.tiktokQueue.length === 0) return;
+    displayTikTokItem(state.tiktokIndex + 1, direction);
 }
+const nextReelImage = nextTikTokImage;
 
-function prevTikTokImage() {
-    displayTikTokItem(state.tiktokIndex - 1);
+function prevTikTokImage(direction = 'down') {
+    if (state.tiktokQueue.length === 0) return;
+    displayTikTokItem(state.tiktokIndex - 1, direction);
 }
+const prevReelImage = prevTikTokImage;
 
 function handleTikTokWheel(e) {
-    if (Math.abs(e.deltaY) > 40) {
-        if (e.deltaY > 0) nextTikTokImage();
-        else prevTikTokImage();
+    if (Math.abs(e.deltaY) > 30) {
+        if (e.deltaY > 0) nextTikTokImage('up');
+        else prevTikTokImage('down');
     }
+}
+
+// Swiping support for Reel Mode (Mouse drag & Touch swipe)
+let reelTouchStartY = 0;
+let reelIsMouseDown = false;
+let reelMouseStartY = 0;
+
+function initReelSwipe() {
+    const reelArea = document.getElementById('reel-swipe-container') || document.getElementById('tiktok-modal');
+    if (!reelArea) return;
+
+    // Mobile/tablet touch swipe
+    reelArea.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches.length === 1) {
+            reelTouchStartY = e.touches[0].clientY;
+        }
+    }, { passive: true });
+
+    reelArea.addEventListener('touchend', (e) => {
+        if (e.changedTouches && e.changedTouches.length === 1) {
+            const deltaY = reelTouchStartY - e.changedTouches[0].clientY;
+            if (deltaY > 35) {
+                nextTikTokImage('up');
+            } else if (deltaY < -35) {
+                prevTikTokImage('down');
+            }
+        }
+    }, { passive: true });
+
+    // Desktop mouse drag swipe
+    reelArea.addEventListener('mousedown', (e) => {
+        if (e.button === 0) {
+            reelIsMouseDown = true;
+            reelMouseStartY = e.clientY;
+        }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        if (reelIsMouseDown) {
+            reelIsMouseDown = false;
+            const deltaY = reelMouseStartY - e.clientY;
+            if (deltaY > 35) {
+                nextTikTokImage('up');
+            } else if (deltaY < -35) {
+                prevTikTokImage('down');
+            }
+        }
+    });
 }
 
 function toggleTikTokAutoplay() {
@@ -1409,31 +1527,35 @@ function toggleTikTokAutoplay() {
     if (state.tiktokAutoplayActive) {
         clearInterval(state.tiktokAutoplayInterval);
         state.tiktokAutoplayActive = false;
-        icon.innerText = '▶';
-        text.innerText = 'Auto-Play';
-        btn.classList.remove('bg-brand-600', 'text-white');
+        if (icon) icon.innerText = '▶';
+        if (text) text.innerText = 'Auto-Play';
+        if (btn) btn.classList.remove('bg-pink-600', 'text-white');
     } else {
         state.tiktokAutoplayActive = true;
-        icon.innerText = '⏸';
-        text.innerText = 'Playing (5s)';
-        btn.classList.add('bg-brand-600', 'text-white');
-        state.tiktokAutoplayInterval = setInterval(nextTikTokImage, 5000);
+        if (icon) icon.innerText = '⏸';
+        if (text) text.innerText = 'Playing (5s)';
+        if (btn) btn.classList.add('bg-pink-600', 'text-white');
+        state.tiktokAutoplayInterval = setInterval(() => nextTikTokImage('up'), 5000);
     }
 }
+const toggleReelAutoplay = toggleTikTokAutoplay;
 
 function closeTikTokMode() {
     if (state.tiktokAutoplayActive) toggleTikTokAutoplay();
-    document.getElementById('tiktok-modal').classList.add('hidden');
+    const modal = document.getElementById('tiktok-modal');
+    if (modal) modal.classList.add('hidden');
     state.currentTikTokImage = null;
 }
+const closeReelMode = closeTikTokMode;
 
 function copyTikTokPrompt() {
     const text = document.getElementById('tiktok-prompt-text').innerText;
     if (text) {
         navigator.clipboard.writeText(text);
-        showToast('Prompt copied to clipboard', 'info');
+        showToast('(づ｡◕‿‿◕｡)づ Prompt copied to clipboard! ✨', 'info');
     }
 }
+const copyReelPrompt = copyTikTokPrompt;
 
 function loadTikTokPromptIntoGenerator() {
     if (!state.currentTikTokImage) return;
@@ -1447,8 +1569,9 @@ function loadTikTokPromptIntoGenerator() {
     }
     closeTikTokMode();
     switchTab('generator');
-    showToast('Loaded into Generator', 'success');
+    showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loaded into Generator! ✨', 'success');
 }
+const loadReelPromptIntoGenerator = loadTikTokPromptIntoGenerator;
 
 // ==========================================
 // INTERNAL DELETE CONFIRMATION MODAL
@@ -1658,6 +1781,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadAvailableWorkflows();
     preloadTopTags();
     initTagAutocomplete();
+    initReelSwipe();
 
     setInterval(checkComfyStatus, 10000);
 });

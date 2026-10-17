@@ -12,9 +12,12 @@ import websockets
 
 from app.config import (
     COMFYUI_URL,
+    CONFIG_DIR,
     DATA_DIR,
+    DATA_EXTRA_DIR,
     DEFAULT_WORKFLOW_TEMPLATE,
     WORKFLOW_FILE,
+    WORKFLOW_SEARCH_DIRS,
     WORKFLOWS_DIR,
 )
 
@@ -24,6 +27,7 @@ logger = logging.getLogger("comfy_service")
 class ComfyService:
     def __init__(self, comfy_url: str):
         self.comfy_url = comfy_url.rstrip("/")
+        self._local_workflow_paths: Dict[str, Path] = {}
         self._ensure_workflow_template()
 
     def _ensure_workflow_template(self):
@@ -99,20 +103,48 @@ class ComfyService:
             }
         ]
 
-        # 1. Check local WORKFLOWS_DIR
-        try:
-            if WORKFLOWS_DIR.exists():
-                for p in sorted(WORKFLOWS_DIR.glob("*.json")):
+        # 1. Check all local candidate directories (workflows/, config/, data/, appdata/)
+        self._local_workflow_paths = {}
+        discovered_local = set()
+
+        for search_dir in WORKFLOW_SEARCH_DIRS:
+            try:
+                if not search_dir.exists():
+                    continue
+                # Search directory and subdirectories for *.json, *.png, *.webp
+                for p in search_dir.rglob("*"):
+                    if not p.is_file():
+                        continue
+                    if p.name == "workflow_api.json" or "thumbnails" in p.parts or "tags" in p.parts:
+                        continue
+                    suffix = p.suffix.lower()
+                    if suffix not in (".json", ".png", ".webp"):
+                        continue
+
+                    resolved = p.resolve()
+                    if str(resolved) in discovered_local:
+                        continue
+                    discovered_local.add(str(resolved))
+
                     wid = f"local:{p.name}"
+                    if wid in self._local_workflow_paths:
+                        wid = f"local:{p.parent.name}_{p.name}"
+
+                    self._local_workflow_paths[wid] = resolved
+                    display_name = p.stem.replace("_", " ").title()
+                    icon = "🖼️" if suffix in (".png", ".webp") else "📜"
+                    parent_tag = f" ({p.parent.name})" if p.parent != WORKFLOWS_DIR else ""
+
                     workflows.append({
                         "id": wid,
-                        "name": p.stem.replace("_", " ").title(),
+                        "name": f"{icon} {display_name}{parent_tag}",
                         "source": "local",
                         "filename": p.name,
+                        "path": str(p),
                         "is_active": active_id == wid,
                     })
-        except Exception as e:
-            logger.warning(f"Error reading local workflows: {e}")
+            except Exception as e:
+                logger.debug(f"Error scanning workflow dir {search_dir}: {e}")
 
         # 2. Check ComfyUI server userdata endpoints
         try:
@@ -223,12 +255,51 @@ class ComfyService:
             return {}
 
         if workflow_id.startswith("local:"):
+            target_path = self._local_workflow_paths.get(workflow_id)
             filename = workflow_id.replace("local:", "", 1)
-            target = WORKFLOWS_DIR / filename
-            if target.exists():
-                with open(target, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            raise FileNotFoundError(f"Local workflow not found: {filename}")
+
+            if not target_path or not target_path.exists():
+                for d in WORKFLOW_SEARCH_DIRS:
+                    if not d.exists():
+                        continue
+                    candidate = d / filename
+                    if candidate.exists() and candidate.is_file():
+                        target_path = candidate
+                        break
+                    for p in d.rglob(filename):
+                        if p.exists() and p.is_file():
+                            target_path = p
+                            break
+                    if target_path:
+                        break
+
+            if not target_path or not target_path.exists():
+                raise FileNotFoundError(f"Local workflow not found: {filename}")
+
+            if target_path.suffix.lower() in (".png", ".webp"):
+                from PIL import Image
+                with Image.open(target_path) as img:
+                    info = getattr(img, "info", {}) or {}
+                    prompt_str = info.get("prompt")
+                    workflow_str = info.get("workflow")
+                    if prompt_str:
+                        return json.loads(prompt_str) if isinstance(prompt_str, str) else prompt_str
+                    if workflow_str:
+                        wf = json.loads(workflow_str) if isinstance(workflow_str, str) else workflow_str
+                        if isinstance(wf, dict) and "extra" in wf and "prompt" in wf["extra"]:
+                            return wf["extra"]["prompt"]
+                        return wf
+                    raise ValueError(f"No ComfyUI metadata found inside image: {target_path.name}")
+            else:
+                with open(target_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
+                            return data["extra"]["prompt"]
+                        if "prompt" in data and isinstance(data["prompt"], dict):
+                            return data["prompt"]
+                    return data
+
 
         if workflow_id.startswith("server:"):
             filename = workflow_id.replace("server:", "", 1)

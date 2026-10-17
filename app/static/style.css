@@ -1,16 +1,16 @@
 /* ========================================================
-   ComfyUI Studio ✨ スタジオ - Playful Anime Aesthetic Theme
+   ComfyUI Studio ✨ スタジオ - Ultra Playful Anime Aesthetic
    ======================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=Yuji+Boku&display=swap');
 
 :root {
-    --anime-bg-dark: #0a0b14;
-    --anime-card-bg: rgba(18, 19, 34, 0.78);
-    --anime-card-inner: rgba(12, 13, 25, 0.75);
-    --anime-pink: #ff5e98;
-    --anime-pink-hover: #ff75ab;
-    --anime-pink-glow: rgba(255, 94, 152, 0.35);
+    --anime-bg-dark: #0f1021;
+    --anime-card-bg: rgba(22, 24, 45, 0.88);
+    --anime-card-inner: rgba(14, 15, 30, 0.85);
+    --anime-pink: #ff6097;
+    --anime-pink-dark: #be185d;
+    --anime-pink-glow: rgba(255, 96, 151, 0.45);
     --anime-violet: #a855f7;
     --anime-lavender: #c084fc;
     --anime-cyan: #38bdf8;
@@ -22,128 +22,157 @@ body {
     font-family: 'Outfit', 'M PLUS Rounded 1c', system-ui, -apple-system, sans-serif;
     background-color: var(--anime-bg-dark);
     background-image: 
-        radial-gradient(circle at 10% 15%, rgba(255, 94, 152, 0.12) 0%, transparent 40%),
-        radial-gradient(circle at 88% 25%, rgba(168, 85, 247, 0.14) 0%, transparent 45%),
-        radial-gradient(circle at 50% 85%, rgba(56, 189, 248, 0.10) 0%, transparent 50%),
-        radial-gradient(circle at 75% 75%, rgba(251, 191, 36, 0.06) 0%, transparent 35%);
+        radial-gradient(circle at 12% 18%, rgba(255, 96, 151, 0.22) 0%, transparent 40%),
+        radial-gradient(circle at 88% 22%, rgba(168, 85, 247, 0.22) 0%, transparent 45%),
+        radial-gradient(circle at 50% 80%, rgba(56, 189, 248, 0.16) 0%, transparent 50%),
+        radial-gradient(circle at 80% 75%, rgba(251, 191, 36, 0.12) 0%, transparent 35%),
+        radial-gradient(circle at 25% 65%, rgba(52, 211, 153, 0.12) 0%, transparent 35%);
     background-attachment: fixed;
-    color: #f1f2f8;
+    color: #f6f7fb;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Subtle Floating Anime Sparkles Ambient Animation */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    background-image: 
+        radial-gradient(2px 2px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 40px 70px, rgba(255,96,151,0.8), rgba(0,0,0,0)),
+        radial-gradient(3px 3px at 90px 40px, rgba(168,85,247,0.8), rgba(0,0,0,0)),
+        radial-gradient(2px 2px at 160px 120px, rgba(56,189,248,0.8), rgba(0,0,0,0)),
+        radial-gradient(3px 3px at 240px 180px, rgba(251,191,36,0.8), rgba(0,0,0,0));
+    background-repeat: repeat;
+    background-size: 300px 300px;
+    opacity: 0.35;
+    z-index: 1;
 }
 
 /* Custom Anime Scrollbars */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 9px;
+    height: 9px;
 }
 ::-webkit-scrollbar-track {
-    background: rgba(10, 11, 20, 0.8);
+    background: rgba(12, 13, 26, 0.9);
 }
 ::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(255, 94, 152, 0.5), rgba(168, 85, 247, 0.5));
+    background: linear-gradient(180deg, #ff6097, #a855f7);
     border-radius: 9999px;
-    border: 2px solid rgba(10, 11, 20, 0.8);
+    border: 2px solid rgba(12, 13, 26, 0.9);
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #ff5e98, #a855f7);
+    background: linear-gradient(180deg, #ff75ab, #c084fc);
 }
 
-/* Anime Glassmorphic Panels */
+/* Puffy Playful Anime Cards */
 .anime-card {
     background: var(--anime-card-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 94, 152, 0.08);
-    border-radius: 1.5rem;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 2px solid rgba(255, 96, 151, 0.35);
+    box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.65), 0 0 25px rgba(255, 96, 151, 0.15);
+    border-radius: 1.75rem;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    z-index: 2;
 }
 
 .anime-card:hover {
-    border-color: rgba(255, 94, 152, 0.2);
-    box-shadow: 0 16px 40px -6px rgba(0, 0, 0, 0.6), 0 0 20px -2px rgba(255, 94, 152, 0.15);
+    border-color: rgba(255, 96, 151, 0.55);
+    box-shadow: 0 20px 48px -10px rgba(0, 0, 0, 0.75), 0 0 35px rgba(255, 96, 151, 0.25);
+    transform: translateY(-2px);
 }
 
 .anime-card-subtle {
     background: var(--anime-card-inner);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 1rem;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.25rem;
 }
 
-/* Anime Buttons & Micro-Interactions */
+/* 3D Tactile Anime Game Buttons */
 .anime-btn-primary {
-    background: linear-gradient(135deg, #ff5e98 0%, #d946ef 50%, #9333ea 100%);
+    background: linear-gradient(135deg, #ff5e98 0%, #ec4899 45%, #9333ea 100%);
     color: #ffffff;
-    font-weight: 700;
-    letter-spacing: 0.025em;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    box-shadow: 0 8px 24px -4px rgba(255, 94, 152, 0.45);
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 5px 0 #9d174d, 0 12px 28px -4px rgba(255, 94, 152, 0.55);
+    transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .anime-btn-primary:hover {
-    transform: translateY(-2px) scale(1.01);
-    box-shadow: 0 12px 30px -4px rgba(255, 94, 152, 0.65), 0 0 15px rgba(217, 70, 239, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 7px 0 #9d174d, 0 16px 36px -4px rgba(255, 94, 152, 0.75);
 }
 .anime-btn-primary:active {
-    transform: translateY(1px) scale(0.98);
+    transform: translateY(4px);
+    box-shadow: 0 1px 0 #9d174d, 0 6px 14px rgba(255, 94, 152, 0.4);
 }
 
 .anime-btn-secondary {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.07);
     color: #f1f2f8;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(8px);
-    transition: all 0.18s ease;
+    font-weight: 700;
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    transition: all 0.15s ease;
 }
 .anime-btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 94, 152, 0.4);
-    transform: translateY(-1px);
+    background: rgba(255, 96, 151, 0.18);
+    border-color: rgba(255, 96, 151, 0.5);
+    transform: translateY(-2px);
     color: #ffffff;
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.4), 0 0 14px rgba(255, 96, 151, 0.3);
 }
 .anime-btn-secondary:active {
-    transform: translateY(1px) scale(0.98);
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
-/* Anime Header Pill */
+/* Cute Anime Brand Pill */
 .anime-brand-pill {
-    background: linear-gradient(135deg, rgba(255, 94, 152, 0.15), rgba(168, 85, 247, 0.15));
-    border: 1px solid rgba(255, 94, 152, 0.35);
-    box-shadow: 0 0 12px rgba(255, 94, 152, 0.2);
+    background: linear-gradient(135deg, rgba(255, 94, 152, 0.25), rgba(168, 85, 247, 0.25));
+    border: 2px solid rgba(255, 94, 152, 0.55);
+    box-shadow: 0 0 18px rgba(255, 94, 152, 0.35);
 }
 
-/* Anime Cute Modals */
+/* Cute Modals */
 .glass-modal {
-    background: rgba(14, 15, 28, 0.96);
+    background: rgba(16, 17, 34, 0.98);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 2px solid rgba(255, 94, 152, 0.45);
+    box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.9), 0 0 45px rgba(255, 94, 152, 0.3);
+}
+
+.glass-reel-card {
+    background: rgba(14, 15, 30, 0.88);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 94, 152, 0.25);
-    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 35px rgba(255, 94, 152, 0.2);
-}
-
-.glass-tiktok-card {
-    background: rgba(12, 13, 25, 0.82);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 94, 152, 0.35);
+    box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.7);
 }
 
 /* Danbooru Tag Autocomplete Dropdown */
 .tag-autocomplete-dropdown {
     position: absolute;
-    z-index: 60;
-    max-height: 300px;
+    z-index: 70;
+    max-height: 320px;
     overflow-y: auto;
-    background: rgba(14, 15, 28, 0.98);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 94, 152, 0.35);
-    border-radius: 1rem;
-    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 25px rgba(255, 94, 152, 0.15);
-    width: 400px;
-    max-width: 90vw;
+    background: rgba(16, 17, 34, 0.98);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 2px solid rgba(255, 94, 152, 0.45);
+    border-radius: 1.25rem;
+    box-shadow: 0 25px 50px -10px rgba(0, 0, 0, 0.85), 0 0 30px rgba(255, 94, 152, 0.25);
+    width: 420px;
+    max-width: 92vw;
 }
 
 .tag-autocomplete-item {
@@ -153,7 +182,7 @@ body {
     padding: 8px 14px;
     cursor: pointer;
     font-size: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     transition: all 0.12s ease;
 }
 
@@ -163,113 +192,128 @@ body {
 
 .tag-autocomplete-item.active,
 .tag-autocomplete-item:hover {
-    background: linear-gradient(90deg, rgba(255, 94, 152, 0.2), rgba(168, 85, 247, 0.15));
-    border-left: 3px solid #ff5e98;
-    padding-left: 17px;
+    background: linear-gradient(90deg, rgba(255, 94, 152, 0.28), rgba(168, 85, 247, 0.22));
+    border-left: 4px solid #ff5e98;
+    padding-left: 18px;
 }
 
 /* Danbooru Category Candy Badges */
 .tag-cat-general {
     color: #38bdf8;
-    background: rgba(56, 189, 248, 0.15);
-    border: 1px solid rgba(56, 189, 248, 0.35);
+    background: rgba(56, 189, 248, 0.18);
+    border: 1.5px solid rgba(56, 189, 248, 0.45);
 }
 
 .tag-cat-artist {
     color: #ff6584;
-    background: rgba(255, 101, 132, 0.16);
-    border: 1px solid rgba(255, 101, 132, 0.4);
+    background: rgba(255, 101, 132, 0.2);
+    border: 1.5px solid rgba(255, 101, 132, 0.5);
 }
 
 .tag-cat-copyright {
     color: #c084fc;
-    background: rgba(192, 132, 252, 0.16);
-    border: 1px solid rgba(192, 132, 252, 0.4);
+    background: rgba(192, 132, 252, 0.2);
+    border: 1.5px solid rgba(192, 132, 252, 0.5);
 }
 
 .tag-cat-character {
     color: #34d399;
-    background: rgba(52, 211, 153, 0.16);
-    border: 1px solid rgba(52, 211, 153, 0.4);
+    background: rgba(52, 211, 153, 0.2);
+    border: 1.5px solid rgba(52, 211, 153, 0.5);
 }
 
 .tag-cat-meta {
     color: #fbbf24;
-    background: rgba(251, 191, 36, 0.16);
-    border: 1px solid rgba(251, 191, 36, 0.4);
+    background: rgba(251, 191, 36, 0.2);
+    border: 1.5px solid rgba(251, 191, 36, 0.5);
 }
 
 /* Tag Pill Buttons (Palette) */
 .tag-pill-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.3rem 0.65rem;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
     border-radius: 9999px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
 }
 .tag-pill-btn:hover {
-    transform: scale(1.06) translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transform: scale(1.08) translateY(-2px);
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.35), 0 0 12px rgba(255, 94, 152, 0.4);
 }
 .tag-pill-btn:active {
-    transform: scale(0.95);
+    transform: scale(0.96) translateY(2px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
 }
 
-/* Custom Anime Sliders */
+/* Custom Cute Anime Sliders */
 input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.1);
+    height: 8px;
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 9999px;
     outline: none;
     transition: background 0.2s;
+    border: 1px solid rgba(255, 94, 152, 0.3);
 }
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: linear-gradient(135deg, #ff5e98, #a855f7);
     cursor: pointer;
-    box-shadow: 0 0 10px rgba(255, 94, 152, 0.7);
-    border: 2px solid #ffffff;
+    box-shadow: 0 0 14px rgba(255, 94, 152, 0.9), 0 2px 5px rgba(0, 0, 0, 0.5);
+    border: 2.5px solid #ffffff;
     transition: all 0.15s ease;
 }
 input[type="range"]::-webkit-slider-thumb:hover {
-    transform: scale(1.25);
-    box-shadow: 0 0 16px rgba(255, 94, 152, 1);
+    transform: scale(1.3);
+    box-shadow: 0 0 20px rgba(255, 94, 152, 1);
 }
 
 /* Drag and Drop Zone for Workflows */
 .workflow-dropzone {
-    border: 2px dashed rgba(255, 94, 152, 0.35);
-    background: rgba(255, 94, 152, 0.03);
-    border-radius: 1.25rem;
-    transition: all 0.2s ease;
+    border: 2.5px dashed rgba(255, 94, 152, 0.5);
+    background: rgba(255, 94, 152, 0.05);
+    border-radius: 1.5rem;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .workflow-dropzone.dragover {
     border-color: #ff5e98;
-    background: rgba(255, 94, 152, 0.12);
-    box-shadow: 0 0 25px rgba(255, 94, 152, 0.35);
-    transform: scale(1.01);
+    background: rgba(255, 94, 152, 0.18);
+    box-shadow: 0 0 35px rgba(255, 94, 152, 0.45);
+    transform: scale(1.02);
 }
 
-/* TikTok Fullscreen Transitions */
-.tiktok-slide-up {
-    animation: tiktokSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+/* Reel Slide Transitions */
+.reel-slide-up {
+    animation: reelSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
-@keyframes tiktokSlideUp {
+@keyframes reelSlideUp {
     from {
         opacity: 0.2;
-        transform: translateY(40px) scale(0.96);
+        transform: translateY(50px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+.reel-slide-down {
+    animation: reelSlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes reelSlideDown {
+    from {
+        opacity: 0.2;
+        transform: translateY(-50px) scale(0.95);
     }
     to {
         opacity: 1;
@@ -279,30 +323,32 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Anime Sparkle Decal Animations */
 @keyframes sparkle-rotate {
-    0% { transform: rotate(0deg) scale(1); opacity: 0.8; }
-    50% { transform: rotate(180deg) scale(1.15); opacity: 1; }
-    100% { transform: rotate(360deg) scale(1); opacity: 0.8; }
+    0% { transform: rotate(0deg) scale(1); opacity: 0.85; }
+    50% { transform: rotate(180deg) scale(1.2); opacity: 1; }
+    100% { transform: rotate(360deg) scale(1); opacity: 0.85; }
 }
 .sparkle-icon {
     display: inline-block;
-    animation: sparkle-rotate 6s linear infinite;
-}
-
-/* Glowing Border Animation */
-@keyframes anime-border-glow {
-    0%, 100% { border-color: rgba(255, 94, 152, 0.4); }
-    50% { border-color: rgba(168, 85, 247, 0.5); }
-}
-.anime-glow-box {
-    animation: anime-border-glow 4s ease-in-out infinite;
+    animation: sparkle-rotate 5s linear infinite;
 }
 
 /* Toast Pop Animations */
 @keyframes toast-slide-in {
-    0% { transform: translateX(100%) scale(0.9); opacity: 0; }
-    70% { transform: translateX(-5%) scale(1.02); opacity: 1; }
+    0% { transform: translateX(110%) scale(0.8); opacity: 0; }
+    70% { transform: translateX(-8%) scale(1.04); opacity: 1; }
     100% { transform: translateX(0) scale(1); opacity: 1; }
 }
 .toast-anime {
     animation: toast-slide-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Reel Touch/Mouse Swiping Gesture Area */
+.reel-swipe-area {
+    touch-action: pan-y;
+    user-select: none;
+    -webkit-user-drag: none;
+    cursor: grab;
+}
+.reel-swipe-area:active {
+    cursor: grabbing;
 }

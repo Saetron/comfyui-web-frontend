@@ -8,6 +8,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    environment:
       - COMFYUI_URL=${COMFYUI_URL:-http://host.docker.internal:8188}
       - DEFAULT_NEGATIVE_PROMPT=${DEFAULT_NEGATIVE_PROMPT:-worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, blurry, deformed}
       - OUTPUT_DIR=/app/output
@@ -17,6 +18,8 @@ services:
     volumes:
       - ./output:/app/output:rw
       - ./appdata:/app/data
+      - ./data:/app/data_extra
+      - ./config:/app/config
     extra_hosts:
       # Allows reaching the host machine (where ComfyUI is running) across Linux, macOS, and Windows Docker
       - "host.docker.internal:host-gateway"

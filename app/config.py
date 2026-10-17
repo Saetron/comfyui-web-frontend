@@ -38,9 +38,28 @@ WORKFLOWS_DIR = DATA_DIR / "workflows"
 DEFAULT_TAGS_FILE = BASE_DIR / "app" / "data" / "tags" / "danbooru.csv"
 USER_TAGS_DIR = DATA_DIR / "tags"
 
+# Candidate search directories for workflows (supports dropping in config/ or data/)
+CONFIG_DIR = Path("/app/config") if is_in_docker else (BASE_DIR / "config")
+DATA_EXTRA_DIR = Path("/app/data_extra") if is_in_docker else (BASE_DIR / "data")
+
+WORKFLOW_SEARCH_DIRS = [
+    WORKFLOWS_DIR,
+    DATA_DIR,
+    CONFIG_DIR / "workflows",
+    CONFIG_DIR,
+    DATA_EXTRA_DIR / "workflows",
+    DATA_EXTRA_DIR,
+    BASE_DIR / "config",
+    BASE_DIR / "data",
+    BASE_DIR / "appdata",
+]
+
 # Ensure essential directories exist
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
 USER_TAGS_DIR.mkdir(parents=True, exist_ok=True)
 WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+DATA_EXTRA_DIR.mkdir(parents=True, exist_ok=True)
+
