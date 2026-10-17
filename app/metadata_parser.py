@@ -166,10 +166,35 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
             ksampler_node = node
         elif "CheckpointLoader" in class_type or ("ckpt_name" in inputs and "Loader" in class_type):
             checkpoint_node = node
-        elif "EmptyLatentImage" in class_type or ("width" in inputs and "height" in inputs and "Latent" in class_type):
+        elif (
+            "EmptyLatentImage" in class_type
+            or any(k in class_type for k in ["EmptyLatent", "EmptySD", "Aspect"])
+            or ("width" in inputs and "height" in inputs and any(k in class_type for k in ["Latent", "Image", "Resolution"]))
+            or "empty_latent_width" in inputs
+        ):
             latent_node = node
-        elif class_type == "CLIPTextEncode":
+        elif "CLIPTextEncode" in class_type or "CLIP" in class_type:
             clip_nodes.append((node_id, node))
+
+    # Prioritize active KSampler's latent generator if available
+    if ksampler_node:
+        latent_link = ksampler_node.get("inputs", {}).get("latent_image")
+        if isinstance(latent_link, list) and len(latent_link) > 0:
+            curr_id = str(latent_link[0])
+            visited = set()
+            while curr_id in prompt_graph and curr_id not in visited:
+                visited.add(curr_id)
+                curr_node = prompt_graph[curr_id]
+                c_inputs = curr_node.get("inputs", {})
+                c_type = curr_node.get("class_type", "")
+                if "width" in c_inputs or "empty_latent_width" in c_inputs or any(k in c_type for k in ["EmptyLatent", "EmptySD", "Latent", "Aspect"]):
+                    latent_node = curr_node
+                    break
+                upstream = c_inputs.get("samples") or c_inputs.get("latent") or c_inputs.get("latent_image")
+                if isinstance(upstream, list) and len(upstream) > 0:
+                    curr_id = str(upstream[0])
+                else:
+                    break
 
     # Parse KSampler details
     if ksampler_node:
@@ -204,19 +229,21 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
             pos_node_id = str(pos_link[0])
             if pos_node_id in prompt_graph:
                 pos_node = prompt_graph[pos_node_id]
-                params["positive_prompt"] = pos_node.get("inputs", {}).get("text", "")
+                p_inputs = pos_node.get("inputs", {})
+                params["positive_prompt"] = p_inputs.get("text") or p_inputs.get("text_g") or p_inputs.get("text_l", "")
 
         if isinstance(neg_link, list) and len(neg_link) > 0:
             neg_node_id = str(neg_link[0])
             if neg_node_id in prompt_graph:
                 neg_node = prompt_graph[neg_node_id]
-                params["negative_prompt"] = neg_node.get("inputs", {}).get("text", "")
+                n_inputs = neg_node.get("inputs", {})
+                params["negative_prompt"] = n_inputs.get("text") or n_inputs.get("text_g") or n_inputs.get("text_l", "")
 
     # Fallback for prompts if not found through KSampler link
     if "positive_prompt" not in params or "negative_prompt" not in params:
         for node_id, node in clip_nodes:
             title = str(node.get("_meta", {}).get("title", "")).lower()
-            text = node.get("inputs", {}).get("text", "")
+            text = node.get("inputs", {}).get("text") or node.get("inputs", {}).get("text_g") or node.get("inputs", {}).get("text_l", "")
             if "positive_prompt" not in params and ("positive" in title or "pos" in title):
                 params["positive_prompt"] = text
             elif "negative_prompt" not in params and ("negative" in title or "neg" in title):
@@ -224,9 +251,11 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
 
         # If still missing and we have clip nodes, take first as positive, second as negative
         if "positive_prompt" not in params and len(clip_nodes) > 0:
-            params["positive_prompt"] = clip_nodes[0][1].get("inputs", {}).get("text", "")
+            c0_inputs = clip_nodes[0][1].get("inputs", {})
+            params["positive_prompt"] = c0_inputs.get("text") or c0_inputs.get("text_g") or c0_inputs.get("text_l", "")
         if "negative_prompt" not in params and len(clip_nodes) > 1:
-            params["negative_prompt"] = clip_nodes[1][1].get("inputs", {}).get("text", "")
+            c1_inputs = clip_nodes[1][1].get("inputs", {})
+            params["negative_prompt"] = c1_inputs.get("text") or c1_inputs.get("text_g") or c1_inputs.get("text_l", "")
 
     # Checkpoint model
     if checkpoint_node:
@@ -237,8 +266,17 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
     # Resolution
     if latent_node:
         inputs = latent_node.get("inputs", {})
-        width = inputs.get("width")
-        height = inputs.get("height")
+        width = inputs.get("width") or inputs.get("empty_latent_width")
+        height = inputs.get("height") or inputs.get("empty_latent_height")
+
+        # Resolve provider node if width/height is a link [provider_id, slot]
+        if isinstance(width, list) and len(width) > 0 and str(width[0]) in prompt_graph:
+            w_prov = prompt_graph[str(width[0])].get("inputs", {})
+            width = w_prov.get("value") or w_prov.get("width")
+        if isinstance(height, list) and len(height) > 0 and str(height[0]) in prompt_graph:
+            h_prov = prompt_graph[str(height[0])].get("inputs", {})
+            height = h_prov.get("value") or h_prov.get("height")
+
         if width and height:
             try:
                 params["width"] = int(width)

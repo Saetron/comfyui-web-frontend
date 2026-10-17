@@ -546,59 +546,199 @@ class ComfyService:
             if isinstance(pos_link, list) and len(pos_link) > 0:
                 pos_id = str(pos_link[0])
                 if pos_id in prompt_graph and "inputs" in prompt_graph[pos_id]:
-                    prompt_graph[pos_id]["inputs"]["text"] = positive_prompt
+                    p_node = prompt_graph[pos_id]
+                    p_inputs = p_node.setdefault("inputs", {})
+                    if "text" in p_inputs or ("text_g" not in p_inputs and "text_l" not in p_inputs):
+                        p_inputs["text"] = positive_prompt
+                    if "text_g" in p_inputs:
+                        p_inputs["text_g"] = positive_prompt
+                    if "text_l" in p_inputs:
+                        p_inputs["text_l"] = positive_prompt
                     pos_injected = True
 
             neg_link = inputs.get("negative")
             if isinstance(neg_link, list) and len(neg_link) > 0:
                 neg_id = str(neg_link[0])
                 if neg_id in prompt_graph and "inputs" in prompt_graph[neg_id]:
-                    prompt_graph[neg_id]["inputs"]["text"] = negative_prompt
+                    n_node = prompt_graph[neg_id]
+                    n_inputs = n_node.setdefault("inputs", {})
+                    if "text" in n_inputs or ("text_g" not in n_inputs and "text_l" not in n_inputs):
+                        n_inputs["text"] = negative_prompt
+                    if "text_g" in n_inputs:
+                        n_inputs["text_g"] = negative_prompt
+                    if "text_l" in n_inputs:
+                        n_inputs["text_l"] = negative_prompt
                     neg_injected = True
 
         # Fallback for prompt injection if not wired directly via KSampler
         if not pos_injected or not neg_injected:
             clip_nodes = []
             for nid, node in prompt_graph.items():
-                if isinstance(node, dict) and node.get("class_type") == "CLIPTextEncode":
+                if isinstance(node, dict) and ("CLIPTextEncode" in node.get("class_type", "") or "CLIP" in node.get("class_type", "")):
                     clip_nodes.append((nid, node))
 
             for nid, node in clip_nodes:
                 title = str(node.get("_meta", {}).get("title", "")).lower()
+                n_inputs = node.setdefault("inputs", {})
                 if not pos_injected and ("positive" in title or "pos" in title):
-                    node.setdefault("inputs", {})["text"] = positive_prompt
+                    if "text" in n_inputs or ("text_g" not in n_inputs and "text_l" not in n_inputs):
+                        n_inputs["text"] = positive_prompt
+                    if "text_g" in n_inputs:
+                        n_inputs["text_g"] = positive_prompt
+                    if "text_l" in n_inputs:
+                        n_inputs["text_l"] = positive_prompt
                     pos_injected = True
                 elif not neg_injected and ("negative" in title or "neg" in title):
-                    node.setdefault("inputs", {})["text"] = negative_prompt
+                    if "text" in n_inputs or ("text_g" not in n_inputs and "text_l" not in n_inputs):
+                        n_inputs["text"] = negative_prompt
+                    if "text_g" in n_inputs:
+                        n_inputs["text_g"] = negative_prompt
+                    if "text_l" in n_inputs:
+                        n_inputs["text_l"] = negative_prompt
                     neg_injected = True
 
             if not pos_injected and len(clip_nodes) > 0:
-                clip_nodes[0][1].setdefault("inputs", {})["text"] = positive_prompt
+                c0_in = clip_nodes[0][1].setdefault("inputs", {})
+                if "text" in c0_in or ("text_g" not in c0_in and "text_l" not in c0_in):
+                    c0_in["text"] = positive_prompt
+                if "text_g" in c0_in:
+                    c0_in["text_g"] = positive_prompt
+                if "text_l" in c0_in:
+                    c0_in["text_l"] = positive_prompt
                 pos_injected = True
             if not neg_injected and len(clip_nodes) > 1:
-                clip_nodes[1][1].setdefault("inputs", {})["text"] = negative_prompt
+                c1_in = clip_nodes[1][1].setdefault("inputs", {})
+                if "text" in c1_in or ("text_g" not in c1_in and "text_l" not in c1_in):
+                    c1_in["text"] = negative_prompt
+                if "text_g" in c1_in:
+                    c1_in["text_g"] = negative_prompt
+                if "text_l" in c1_in:
+                    c1_in["text_l"] = negative_prompt
                 neg_injected = True
 
         # Checkpoint Model injection
         if extra.get("ckpt_name"):
             for nid, node in prompt_graph.items():
-                if isinstance(node, dict) and "CheckpointLoader" in node.get("class_type", ""):
-                    node.setdefault("inputs", {})["ckpt_name"] = str(extra["ckpt_name"])
-                    resolved_params["ckpt_name"] = str(extra["ckpt_name"])
-                    break
-
-        # Dimensions injection
-        if extra.get("width") or extra.get("height"):
-            for nid, node in prompt_graph.items():
-                if isinstance(node, dict) and node.get("class_type") == "EmptyLatentImage":
+                if isinstance(node, dict):
+                    c_type = node.get("class_type", "")
                     inputs = node.setdefault("inputs", {})
-                    if extra.get("width"):
-                        inputs["width"] = int(extra["width"])
-                        resolved_params["width"] = inputs["width"]
-                    if extra.get("height"):
-                        inputs["height"] = int(extra["height"])
-                        resolved_params["height"] = inputs["height"]
-                    break
+                    if "CheckpointLoader" in c_type or ("ckpt_name" in inputs and "Loader" in c_type):
+                        inputs["ckpt_name"] = str(extra["ckpt_name"])
+                        resolved_params["ckpt_name"] = str(extra["ckpt_name"])
+                        break
+
+        # Dimensions injection (Latent creation, Aspect Ratio, SDXL Conditioning, and Primitive links)
+        target_width = int(extra["width"]) if extra.get("width") else None
+        target_height = int(extra["height"]) if extra.get("height") else None
+
+        if target_width or target_height:
+            def update_node_dim(node: Dict[str, Any], w: Optional[int], h: Optional[int]):
+                n_inputs = node.setdefault("inputs", {})
+
+                # If width input is a link [provider_id, slot], update upstream provider as well
+                w_link = n_inputs.get("width")
+                if isinstance(w_link, list) and len(w_link) > 0 and str(w_link[0]) in prompt_graph:
+                    w_provider = prompt_graph[str(w_link[0])]
+                    wp_in = w_provider.setdefault("inputs", {})
+                    if "value" in wp_in and w:
+                        wp_in["value"] = w
+                    if "width" in wp_in and w:
+                        wp_in["width"] = w
+
+                # If height input is a link [provider_id, slot], update upstream provider as well
+                h_link = n_inputs.get("height")
+                if isinstance(h_link, list) and len(h_link) > 0 and str(h_link[0]) in prompt_graph:
+                    h_provider = prompt_graph[str(h_link[0])]
+                    hp_in = h_provider.setdefault("inputs", {})
+                    if "value" in hp_in and h:
+                        hp_in["value"] = h
+                    if "height" in hp_in and h:
+                        hp_in["height"] = h
+
+                # Set dimensions on the node itself
+                if w:
+                    n_inputs["width"] = w
+                if h:
+                    n_inputs["height"] = h
+
+                # Handle empty_latent_width / empty_latent_height (Efficient Loader)
+                if "empty_latent_width" in n_inputs and w:
+                    n_inputs["empty_latent_width"] = w
+                if "empty_latent_height" in n_inputs and h:
+                    n_inputs["empty_latent_height"] = h
+
+            # 1. First priority: Trace directly from active KSampler's latent_image link
+            if ksampler_node:
+                latent_link = ksampler_node.get("inputs", {}).get("latent_image")
+                if isinstance(latent_link, list) and len(latent_link) > 0:
+                    curr_id = str(latent_link[0])
+                    visited = set()
+                    while curr_id in prompt_graph and curr_id not in visited:
+                        visited.add(curr_id)
+                        curr_node = prompt_graph[curr_id]
+                        c_type = curr_node.get("class_type", "")
+                        c_inputs = curr_node.get("inputs", {})
+
+                        is_latent_source = (
+                            "width" in c_inputs
+                            or "empty_latent_width" in c_inputs
+                            or any(k in c_type for k in ["EmptyLatent", "EmptySD", "LatentImage", "Aspect", "Size", "Resolution"])
+                        )
+
+                        if is_latent_source:
+                            update_node_dim(curr_node, target_width, target_height)
+                            break
+
+                        # Walk upstream
+                        upstream = c_inputs.get("samples") or c_inputs.get("latent") or c_inputs.get("latent_image")
+                        if isinstance(upstream, list) and len(upstream) > 0:
+                            curr_id = str(upstream[0])
+                        else:
+                            break
+
+            # 2. General scan: Update all Empty Latent, Aspect Ratio, and Sizing nodes in the workflow
+            for nid, node in prompt_graph.items():
+                if not isinstance(node, dict):
+                    continue
+                c_type = node.get("class_type", "")
+                c_inputs = node.setdefault("inputs", {})
+
+                is_dim_node = (
+                    c_type in [
+                        "EmptyLatentImage",
+                        "SDXLEmptyLatentImage",
+                        "EmptySD3LatentImage",
+                        "EmptyLatentImagePresets",
+                        "EmptyMochiLatentVideo",
+                        "EmptyHunyuanLatentVideo",
+                        "EmptyLTXVLatentVideo",
+                        "CR SDXL Aspect Ratio",
+                        "CR Aspect Ratio",
+                        "CR SD1.5 Aspect Ratio",
+                    ]
+                    or any(k in c_type for k in ["EmptyLatent", "EmptySD", "Aspect"])
+                    or ("width" in c_inputs and "height" in c_inputs and any(k in c_type for k in ["Latent", "Image", "Resolution"]))
+                    or ("empty_latent_width" in c_inputs)
+                )
+
+                if is_dim_node:
+                    update_node_dim(node, target_width, target_height)
+
+                # 3. Synchronize SDXL conditioning dimensions (CLIPTextEncodeSDXL)
+                if "CLIPTextEncodeSDXL" in c_type:
+                    if target_width:
+                        c_inputs["width"] = target_width
+                        if "target_width" in c_inputs:
+                            c_inputs["target_width"] = target_width
+                    if target_height:
+                        c_inputs["height"] = target_height
+                        if "target_height" in c_inputs:
+                            c_inputs["target_height"] = target_height
+
+            if target_width:
+                resolved_params["width"] = target_width
+            if target_height:
+                resolved_params["height"] = target_height
 
         return prompt_graph, resolved_params
 

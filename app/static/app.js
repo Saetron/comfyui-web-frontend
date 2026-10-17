@@ -1127,8 +1127,29 @@ function rollNewSeed() {
 }
 
 function setResolution(w, h) {
-    document.getElementById('width-input').value = w;
-    document.getElementById('height-input').value = h;
+    const wInput = document.getElementById('width-input');
+    const hInput = document.getElementById('height-input');
+    if (wInput) wInput.value = w;
+    if (hInput) hInput.value = h;
+    highlightActiveResPreset();
+    showToast(`📐 Resolution set to ${w}×${h}`, 'info');
+}
+
+function highlightActiveResPreset() {
+    const wInput = document.getElementById('width-input');
+    const hInput = document.getElementById('height-input');
+    if (!wInput || !hInput) return;
+    const currentRes = `${wInput.value}x${hInput.value}`;
+
+    document.querySelectorAll('.res-preset-btn').forEach(btn => {
+        if (btn.dataset.res === currentRes) {
+            btn.classList.add('border-pink-500/70', 'bg-pink-500/25', 'text-white', 'shadow-md', 'shadow-pink-500/30');
+            btn.classList.remove('border-white/10', 'bg-white/5', 'text-pink-200');
+        } else {
+            btn.classList.remove('border-pink-500/70', 'bg-pink-500/25', 'text-white', 'shadow-md', 'shadow-pink-500/30');
+            btn.classList.add('border-white/10', 'bg-white/5', 'text-pink-200');
+        }
+    });
 }
 
 function toggleAdvancedAccordion() {
@@ -2181,6 +2202,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initTagAutocomplete();
     initReelSwipe();
     updateBatchCountUI();
+    highlightActiveResPreset();
 
     setInterval(checkComfyStatus, 10000);
 });

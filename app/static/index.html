@@ -252,15 +252,15 @@
                                 <div>
                                     <label class="block text-xs font-bold text-purple-300 mb-1.5">Canvas Resolution (解像度)</label>
                                     <div class="flex flex-wrap gap-1.5 mb-2.5">
-                                        <button type="button" onclick="setResolution(512, 512)" class="tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10">512×512</button>
-                                        <button type="button" onclick="setResolution(768, 768)" class="tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10">768×768</button>
-                                        <button type="button" onclick="setResolution(1024, 1024)" class="tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10">1024×1024</button>
-                                        <button type="button" onclick="setResolution(832, 1216)" class="tag-pill-btn bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 font-bold">832×1216 (Portrait 縦)</button>
-                                        <button type="button" onclick="setResolution(1216, 832)" class="tag-pill-btn bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 border border-sky-500/30 font-bold">1216×832 (Landscape 横)</button>
+                                        <button type="button" onclick="setResolution(512, 512)" class="res-preset-btn tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10" data-res="512x512">512×512</button>
+                                        <button type="button" onclick="setResolution(768, 768)" class="res-preset-btn tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10" data-res="768x768">768×768</button>
+                                        <button type="button" onclick="setResolution(1024, 1024)" class="res-preset-btn tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10" data-res="1024x1024">1024×1024</button>
+                                        <button type="button" onclick="setResolution(832, 1216)" class="res-preset-btn tag-pill-btn bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 font-bold" data-res="832x1216">832×1216 (Portrait 縦)</button>
+                                        <button type="button" onclick="setResolution(1216, 832)" class="res-preset-btn tag-pill-btn bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 border border-sky-500/30 font-bold" data-res="1216x832">1216×832 (Landscape 横)</button>
                                     </div>
                                     <div class="grid grid-cols-2 gap-3">
-                                        <input type="number" id="width-input" value="512" step="64" min="64" max="4096" placeholder="Width" class="bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
-                                        <input type="number" id="height-input" value="512" step="64" min="64" max="4096" placeholder="Height" class="bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
+                                        <input type="number" id="width-input" value="512" step="64" min="64" max="4096" placeholder="Width" oninput="highlightActiveResPreset()" class="bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
+                                        <input type="number" id="height-input" value="512" step="64" min="64" max="4096" placeholder="Height" oninput="highlightActiveResPreset()" class="bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
                                     </div>
                                 </div>
 
