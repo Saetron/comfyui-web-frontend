@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚙️ CI / Maintenance
 - Added Dependabot configuration (`.github/dependabot.yml`) for automated weekly vulnerability and dependency updates covering `pip`, `docker`, and `github-actions`.
+- Upgraded GitHub Actions workflow dependencies in `.github/workflows/docker-publish.yml`:
+  - `actions/checkout` to `v7`
+  - `docker/build-push-action` to `v7`
+  - `docker/metadata-action` to `v6`
+  - `docker/setup-buildx-action` to `v4`
+  - `docker/login-action` to `v4`
+  - `docker/setup-qemu-action` to `v4`
+- Upgraded Python dependencies in `requirements.txt`:
+  - `fastapi` to `>=0.143.3`
+  - `uvicorn[standard]` to `>=0.54.0`
+  - `websockets` to `>=17.2`
+  - `httpx` to `>=0.28.1`
+  - `pillow` to `>=13.0.0`
+  - `watchfiles` to `>=1.3.0`
+  - `pydantic` to `>=2.14.1`
+  - `python-multipart` to `>=0.0.32`
 
 ---
 
