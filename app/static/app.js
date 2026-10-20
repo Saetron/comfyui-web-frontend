@@ -62,6 +62,7 @@ const state = {
     },
     activePalette: null,
     lastFocusedPromptInput: 'positive-prompt',
+    autoNewlines: localStorage.getItem('comfyui_auto_newlines') !== 'false',
 };
 
 // Utilities
@@ -631,7 +632,15 @@ function initTagAutocomplete() {
 
         elem.addEventListener('input', (e) => {
             state.lastFocusedPromptInput = id;
+            applyPromptAutoNewlineCleanup(elem);
             handlePromptInput(elem);
+        });
+
+        elem.addEventListener('paste', () => {
+            setTimeout(() => {
+                applyPromptAutoNewlineCleanup(elem);
+                handlePromptInput(elem);
+            }, 0);
         });
 
         elem.addEventListener('keydown', (e) => {
@@ -826,6 +835,11 @@ function handlePromptKeydown(textarea, e) {
             hideAutocomplete();
             return;
         }
+    } else if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && state.autoNewlines) {
+        // Auto convert Enter key into comma separation without double commas
+        e.preventDefault();
+        applyEnterNewlineAsComma(textarea);
+        return;
     }
 }
 
@@ -954,10 +968,105 @@ function convertActivePromptUnderscoresToSpaces() {
     showToast('Converted underscores to spaces', 'info');
 }
 
+// ==========================================
+// PROMPT NEWLINE & TAG FORMATTING UTILITIES
+// ==========================================
+function formatPromptNewlines(text) {
+    if (!text) return '';
+    // Replace all line breaks (and any whitespace bordering them) with comma
+    let cleaned = text.replace(/[ \t]*[\r\n]+[ \t]*/g, ',');
+    // Collapse any repeated commas with optional spaces between/around them into a single comma and space
+    cleaned = cleaned.replace(/([ \t]*,[ \t]*)+/g, ', ');
+    // Clean up any comma at the very start of prompt
+    cleaned = cleaned.replace(/^[ \t]*,+[ \t]*/, '');
+    return cleaned;
+}
+
+function applyPromptAutoNewlineCleanup(textarea) {
+    if (!textarea || !state.autoNewlines) return;
+    const val = textarea.value;
+    if (!val || (!val.includes('\n') && !val.includes('\r') && !/[ \t]*,[ \t]*,/.test(val))) {
+        return;
+    }
+
+    const start = textarea.selectionStart;
+    const textBefore = val.substring(0, start);
+    const cleanedBefore = formatPromptNewlines(textBefore);
+    const cleanedAll = formatPromptNewlines(val);
+
+    if (val !== cleanedAll) {
+        textarea.value = cleanedAll;
+        const newPos = Math.min(cleanedBefore.length, cleanedAll.length);
+        textarea.setSelectionRange(newPos, newPos);
+    }
+}
+
+function applyEnterNewlineAsComma(textarea) {
+    const text = textarea.value;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = text.substring(0, start);
+    const after = text.substring(end);
+
+    const trimmedBefore = before.trimEnd();
+    let insert = ', ';
+    if (trimmedBefore.endsWith(',')) {
+        insert = before.endsWith(' ') ? '' : ' ';
+    } else if (before.length === 0) {
+        insert = '';
+    }
+
+    let cleanAfter = after;
+    if (insert.includes(',')) {
+        cleanAfter = after.replace(/^[ \t]*,+[ \t]*/, ' ');
+    }
+
+    const newText = before + insert + cleanAfter;
+    textarea.value = newText;
+    const newCursor = before.length + insert.length;
+    textarea.setSelectionRange(newCursor, newCursor);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function toggleAutoNewlines() {
+    state.autoNewlines = !state.autoNewlines;
+    localStorage.setItem('comfyui_auto_newlines', state.autoNewlines ? 'true' : 'false');
+    updateAutoNewlinesUI();
+
+    if (state.autoNewlines) {
+        const p = document.getElementById('positive-prompt');
+        const n = document.getElementById('negative-prompt');
+        if (p) applyPromptAutoNewlineCleanup(p);
+        if (n) applyPromptAutoNewlineCleanup(n);
+        showToast('(✿◠‿◠) Auto newline ➔ comma enabled!', 'success');
+    } else {
+        showToast('(・_・;) Auto newline ➔ comma disabled', 'info');
+    }
+}
+
+function updateAutoNewlinesUI() {
+    const badge = document.getElementById('badge-toggle-newlines');
+    const btn = document.getElementById('btn-toggle-newlines');
+    if (!badge || !btn) return;
+
+    if (state.autoNewlines) {
+        badge.innerText = 'ON';
+        badge.className = 'text-[9px] font-extrabold text-emerald-400';
+        btn.className = 'px-2 py-0.5 bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 rounded-lg border border-pink-500/40 text-[11px] font-bold transition-colors flex items-center gap-1 shadow-sm';
+        btn.title = 'Auto-replace newlines with commas: ON';
+    } else {
+        badge.innerText = 'OFF';
+        badge.className = 'text-[9px] font-extrabold text-zinc-500';
+        btn.className = 'px-2 py-0.5 bg-white/5 hover:bg-white/10 text-zinc-400 rounded-lg border border-white/10 text-[11px] font-bold transition-colors flex items-center gap-1';
+        btn.title = 'Auto-replace newlines with commas: OFF';
+    }
+}
+
 function cleanPromptTags() {
     const input = document.getElementById(state.lastFocusedPromptInput || 'positive-prompt');
     if (!input) return;
-    const parts = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    const cleaned = formatPromptNewlines(input.value);
+    const parts = cleaned.split(',').map(s => s.trim()).filter(Boolean);
     const seen = new Set();
     const unique = [];
     parts.forEach(p => {
@@ -1237,9 +1346,18 @@ function clearInput(id) {
 
 async function handleGenerate() {
     const positivePromptEl = document.getElementById('positive-prompt');
-    const positivePrompt = positivePromptEl ? positivePromptEl.value.trim() : '';
+    const rawPos = positivePromptEl ? positivePromptEl.value.trim() : '';
+    const positivePrompt = state.autoNewlines ? formatPromptNewlines(rawPos) : rawPos;
+    if (positivePromptEl && positivePromptEl.value !== positivePrompt) {
+        positivePromptEl.value = positivePrompt;
+    }
+
     const negativePromptEl = document.getElementById('negative-prompt');
-    const negativePrompt = negativePromptEl ? negativePromptEl.value.trim() : '';
+    const rawNeg = negativePromptEl ? negativePromptEl.value.trim() : '';
+    const negativePrompt = state.autoNewlines ? formatPromptNewlines(rawNeg) : rawNeg;
+    if (negativePromptEl && negativePromptEl.value !== negativePrompt) {
+        negativePromptEl.value = negativePrompt;
+    }
 
     const seedRandomizeEl = document.getElementById('seed-randomize');
     const isRandomSeed = seedRandomizeEl ? seedRandomizeEl.checked : true;
@@ -1892,8 +2010,12 @@ function loadModalPromptIntoGenerator() {
     if (!state.currentModalImage) return;
     const p = state.currentModalImage.parsed || {};
 
-    if (p.positive_prompt) document.getElementById('positive-prompt').value = p.positive_prompt;
-    if (p.negative_prompt) document.getElementById('negative-prompt').value = p.negative_prompt;
+    if (p.positive_prompt) {
+        document.getElementById('positive-prompt').value = state.autoNewlines ? formatPromptNewlines(p.positive_prompt) : p.positive_prompt;
+    }
+    if (p.negative_prompt) {
+        document.getElementById('negative-prompt').value = state.autoNewlines ? formatPromptNewlines(p.negative_prompt) : p.negative_prompt;
+    }
     if (p.seed !== undefined && p.seed !== null) {
         document.getElementById('seed-input').value = p.seed;
         document.getElementById('seed-randomize').checked = false;
@@ -2369,6 +2491,7 @@ window.addEventListener('DOMContentLoaded', () => {
     initReelSwipe();
     updateBatchCountUI();
     highlightActiveResPreset();
+    updateAutoNewlinesUI();
 
     setInterval(checkComfyStatus, 10000);
 });

@@ -123,3 +123,24 @@ def test_api_delete_image_endpoint(temp_dirs):
     finally:
         gallery_service.output_dir = orig_out
         gallery_service.thumbnails_dir = orig_thumb
+
+
+def test_format_prompt_newlines():
+    from app.main import _format_prompt_newlines
+
+    assert _format_prompt_newlines("1girl, solo\nmasterpiece\nbest quality") == "1girl, solo, masterpiece, best quality"
+    assert _format_prompt_newlines("1girl, solo,\nmasterpiece,\nbest quality") == "1girl, solo, masterpiece, best quality"
+    assert _format_prompt_newlines("1girl, solo , \n , masterpiece") == "1girl, solo, masterpiece"
+    assert _format_prompt_newlines("1girl, solo\n\n\nmasterpiece") == "1girl, solo, masterpiece"
+    assert _format_prompt_newlines("1girl,,solo, ,masterpiece") == "1girl, solo, masterpiece"
+    assert _format_prompt_newlines("1girl, solo,   ,   masterpiece") == "1girl, solo, masterpiece"
+    assert _format_prompt_newlines("masterpiece\r\nbest quality\r\n\r\n8k") == "masterpiece, best quality, 8k"
+
+
+def test_api_images_all_endpoint():
+    client = TestClient(app)
+    response = client.get("/api/images/all")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total" in data
+    assert "items" in data

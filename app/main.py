@@ -330,6 +330,16 @@ async def _run_generation_tracker(
         })
 
 
+def _format_prompt_newlines(text: str) -> str:
+    """Auto remove newlines, replace with commas, and collapse duplicate commas/whitespace."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"[ \t]*[\r\n]+[ \t]*", ",", text)
+    cleaned = re.sub(r"([ \t]*,[ \t]*)+", ", ", cleaned)
+    cleaned = re.sub(r"^[ \t]*,+[ \t]*", "", cleaned)
+    return cleaned.strip()
+
+
 @app.post("/api/generate")
 async def generate_image(req: GenerateRequest):
     """
@@ -340,6 +350,9 @@ async def generate_image(req: GenerateRequest):
     workflow = comfy_service.load_workflow_template()
     if not workflow:
         raise HTTPException(status_code=500, detail="No valid workflow template found.")
+
+    clean_positive = _format_prompt_newlines(req.positive_prompt)
+    clean_negative = _format_prompt_newlines(req.negative_prompt)
 
     extra = {
         "steps": req.steps,
@@ -369,8 +382,8 @@ async def generate_image(req: GenerateRequest):
 
         prompt_graph, resolved_params = comfy_service.inject_workflow(
             workflow=workflow,
-            positive_prompt=req.positive_prompt,
-            negative_prompt=req.negative_prompt,
+            positive_prompt=clean_positive,
+            negative_prompt=clean_negative,
             seed=current_seed,
             randomize_seed=randomize,
             extra_params=extra,
