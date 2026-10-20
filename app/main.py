@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,7 +21,6 @@ from app.config import (
     HOST,
     OUTPUT_DIR,
     PORT,
-    THUMBNAILS_DIR,
 )
 from app.comfy_service import comfy_service
 from app.gallery_service import gallery_service
@@ -29,6 +29,10 @@ from app.tag_service import tag_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("app")
+
+_NEWLINE_RE = re.compile(r"[ \t]*[\r\n]+[ \t]*")
+_MULTI_COMMA_RE = re.compile(r"([ \t]*,[ \t]*)+")
+_LEAD_COMMA_RE = re.compile(r"^[ \t]*,+[ \t]*")
 
 
 # Pydantic models for API
@@ -126,6 +130,7 @@ async def lifespan(app: FastAPI):
         await watcher_task
     except asyncio.CancelledError:
         pass
+    await comfy_service.close()
     logger.info("Application shutdown complete.")
 
 
@@ -150,11 +155,10 @@ if STATIC_DIR.exists():
 async def get_index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        with open(index_file, "r", encoding="utf-8") as f:
-            return HTMLResponse(
-                content=f.read(),
-                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
-            )
+        return HTMLResponse(
+            content=index_file.read_text(encoding="utf-8"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     return HTMLResponse("<h3>ComfyUI Web UI loading...</h3>")
 
 
@@ -171,11 +175,10 @@ async def get_config():
 async def get_status():
     """Get status of ComfyUI backend, defaults, and gallery directory stats."""
     comfy_health = await comfy_service.check_health()
-    gallery_info = gallery_service.list_images(limit=1)
     return {
         "comfyui": comfy_health,
         "output_dir": str(OUTPUT_DIR),
-        "total_images": gallery_info["total"],
+        "total_images": gallery_service.total_images,
         "default_negative_prompt": DEFAULT_NEGATIVE_PROMPT,
     }
 
@@ -289,7 +292,11 @@ async def upload_workflow(file: UploadFile = File(...)):
     """Upload and activate a workflow from a .json file or a ComfyUI-generated .png file."""
     try:
         content_bytes = await file.read()
-        res = comfy_service.import_workflow_file(file.filename or "uploaded_workflow.json", content_bytes)
+        res = await asyncio.to_thread(
+            comfy_service.import_workflow_file,
+            file.filename or "uploaded_workflow.json",
+            content_bytes,
+        )
         # Fetch updated workflow list
         all_workflows = await comfy_service.list_available_workflows()
         parsed_params = parse_comfyui_prompt_graph(res.get("workflow", {}))
@@ -334,9 +341,9 @@ def _format_prompt_newlines(text: str) -> str:
     """Auto remove newlines, replace with commas, and collapse duplicate commas/whitespace."""
     if not text:
         return ""
-    cleaned = re.sub(r"[ \t]*[\r\n]+[ \t]*", ",", text)
-    cleaned = re.sub(r"([ \t]*,[ \t]*)+", ", ", cleaned)
-    cleaned = re.sub(r"^[ \t]*,+[ \t]*", "", cleaned)
+    cleaned = _NEWLINE_RE.sub(",", text)
+    cleaned = _MULTI_COMMA_RE.sub(", ", cleaned)
+    cleaned = _LEAD_COMMA_RE.sub("", cleaned)
     return cleaned.strip()
 
 
@@ -463,7 +470,7 @@ async def list_all_gallery_images(
 @app.get("/api/images/{file_path:path}/metadata")
 async def get_image_metadata(file_path: str):
     """Extract embedded prompt and generation metadata for an image."""
-    meta = gallery_service.get_metadata(file_path)
+    meta = await asyncio.to_thread(gallery_service.get_metadata, file_path)
     if not meta:
         raise HTTPException(status_code=404, detail="Image not found or could not be read.")
     return meta
@@ -489,7 +496,7 @@ async def serve_thumbnail(file_path: str):
     if not resolved or not resolved.exists():
         raise HTTPException(status_code=404, detail="Image file not found.")
 
-    thumb_path = gallery_service.ensure_thumbnail(resolved)
+    thumb_path = await asyncio.to_thread(gallery_service.ensure_thumbnail, resolved)
     return FileResponse(
         path=thumb_path,
         headers={"Cache-Control": "public, max-age=86400"},
@@ -504,9 +511,12 @@ async def delete_image(file_path: str):
         if not deleted:
             raise HTTPException(status_code=404, detail="Image file not found.")
         return {"success": True, "deleted": file_path}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting image {file_path}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.websocket("/ws/{client_id}")

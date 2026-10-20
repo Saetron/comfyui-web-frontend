@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import io
 import json
 import logging
 import random
@@ -11,12 +12,11 @@ from urllib.parse import urlparse
 
 import httpx
 import websockets
+from PIL import Image
 
 from app.config import (
     COMFYUI_URL,
-    CONFIG_DIR,
     DATA_DIR,
-    DATA_EXTRA_DIR,
     DEFAULT_WORKFLOW_TEMPLATE,
     WORKFLOW_FILE,
     WORKFLOW_SEARCH_DIRS,
@@ -25,12 +25,86 @@ from app.config import (
 
 logger = logging.getLogger("comfy_service")
 
+_CLEAN_STEM_RE = re.compile(r"[^a-zA-Z0-9_\-\s]")
+_RES_STR_RE = re.compile(r"\d+\s*[xX*×]\s*\d+")
+
+_DIM_NODE_TYPES = {
+    "EmptyLatentImage",
+    "SDXLEmptyLatentImage",
+    "EmptySD3LatentImage",
+    "EmptyLatentImagePresets",
+    "EmptyMochiLatentVideo",
+    "EmptyHunyuanLatentVideo",
+    "EmptyLTXVLatentVideo",
+    "CR SDXL Aspect Ratio",
+    "CR Aspect Ratio",
+    "CR SD1.5 Aspect Ratio",
+}
+_DIM_CLASS_KEYWORDS = ("EmptyLatent", "EmptySD", "SDXLEmptyLatent", "LatentImage", "Aspect", "Resolution", "Size")
+_DIM_INPUT_KEYS = ("width", "height", "empty_latent_width", "empty_latent_height", "aspect_ratio", "resolution")
+_WIDTH_KEYS = ("width", "empty_latent_width", "target_width", "original_width", "max_width")
+_HEIGHT_KEYS = ("height", "empty_latent_height", "target_height", "original_height", "max_height")
+
+
+def _unwrap_workflow_json(data: Any) -> Dict[str, Any]:
+    """Unwrap nested ComfyUI prompt graph from extra.prompt or prompt wrapper."""
+    if isinstance(data, dict):
+        if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
+            return data["extra"]["prompt"]
+        if "prompt" in data and isinstance(data["prompt"], dict):
+            return data["prompt"]
+        return data
+    return {}
+
+
+def _extract_workflow_from_image(img: Image.Image) -> Dict[str, Any]:
+    """Extract embedded ComfyUI prompt or workflow JSON from an open PIL Image."""
+    raw_info = getattr(img, "info", {}) or {}
+    prompt_str = raw_info.get("prompt")
+    if prompt_str:
+        parsed = json.loads(prompt_str) if isinstance(prompt_str, str) else prompt_str
+        return _unwrap_workflow_json(parsed)
+
+    workflow_str = raw_info.get("workflow")
+    if workflow_str:
+        parsed = json.loads(workflow_str) if isinstance(workflow_str, str) else workflow_str
+        return _unwrap_workflow_json(parsed)
+
+    raise ValueError("No embedded ComfyUI workflow or prompt found in image metadata.")
+
+
+def _set_clip_prompt_inputs(inputs: Dict[str, Any], prompt: str):
+    """Populate CLIPTextEncode or SDXL CLIP text inputs with the given prompt."""
+    if "text" in inputs or ("text_g" not in inputs and "text_l" not in inputs):
+        inputs["text"] = prompt
+    if "text_g" in inputs:
+        inputs["text_g"] = prompt
+    if "text_l" in inputs:
+        inputs["text_l"] = prompt
+
 
 class ComfyService:
     def __init__(self, comfy_url: str):
         self.comfy_url = comfy_url.rstrip("/")
         self._local_workflow_paths: Dict[str, Path] = {}
-        self._ensure_workflow_template()
+        self._cached_workflow: Optional[Tuple[float, Dict[str, Any]]] = None
+        self._cached_active_id: Optional[str] = None
+        self._http_client: Optional[httpx.AsyncClient] = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        """Return a shared httpx.AsyncClient with connection pooling."""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                timeout=8.0,
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=25),
+            )
+        return self._http_client
+
+    async def close(self):
+        """Close the shared HTTP client cleanly on shutdown."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
 
     def _ensure_workflow_template(self):
         """Ensure active workflow template file exists in data directory."""
@@ -43,13 +117,38 @@ class ComfyService:
         except Exception as e:
             logger.error(f"Error initializing workflow file: {e}")
 
+    def _resolve_local_workflow_path(self, workflow_id: str) -> Optional[Path]:
+        """Resolve a local:<filename> workflow ID to its Path on disk."""
+        target_path = self._local_workflow_paths.get(workflow_id)
+        if target_path and target_path.exists():
+            return target_path
+
+        filename = workflow_id.replace("local:", "", 1)
+        for d in WORKFLOW_SEARCH_DIRS:
+            if not d.exists():
+                continue
+            candidate = d / filename
+            if candidate.exists() and candidate.is_file():
+                self._local_workflow_paths[workflow_id] = candidate.resolve()
+                return self._local_workflow_paths[workflow_id]
+            for p in d.rglob(filename):
+                if p.exists() and p.is_file():
+                    self._local_workflow_paths[workflow_id] = p.resolve()
+                    return self._local_workflow_paths[workflow_id]
+        return None
+
     def load_workflow_template(self) -> Dict[str, Any]:
-        """Load current workflow API JSON template."""
+        """Load current workflow API JSON template with mtime-validated in-memory caching."""
         self._ensure_workflow_template()
         if WORKFLOW_FILE.exists():
             try:
+                mtime = WORKFLOW_FILE.stat().st_mtime
+                if self._cached_workflow and self._cached_workflow[0] == mtime:
+                    return self._cached_workflow[1]
                 with open(WORKFLOW_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    wf = json.load(f)
+                self._cached_workflow = (mtime, wf)
+                return wf
             except Exception as e:
                 logger.error(f"Error reading {WORKFLOW_FILE}: {e}")
 
@@ -65,27 +164,16 @@ class ComfyService:
         WORKFLOW_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(WORKFLOW_FILE, "w", encoding="utf-8") as f:
             json.dump(workflow_dict, f, indent=2)
+        try:
+            self._cached_workflow = (WORKFLOW_FILE.stat().st_mtime, workflow_dict)
+        except Exception:
+            self._cached_workflow = None
         logger.info(f"Updated workflow template at {WORKFLOW_FILE}")
 
         # If a local workflow file is currently active, sync the updated parameters to it as well
         active_id = self.get_active_workflow_id()
         if active_id and active_id.startswith("local:"):
-            filename = active_id.replace("local:", "", 1)
-            target_path = getattr(self, "_local_workflow_paths", {}).get(active_id)
-            if not target_path or not target_path.exists():
-                for d in WORKFLOW_SEARCH_DIRS:
-                    if not d.exists():
-                        continue
-                    candidate = d / filename
-                    if candidate.exists() and candidate.is_file():
-                        target_path = candidate
-                        break
-                    for p in d.rglob(filename):
-                        if p.exists() and p.is_file():
-                            target_path = p
-                            break
-                    if target_path:
-                        break
+            target_path = self._resolve_local_workflow_path(active_id)
             if target_path and target_path.exists() and target_path.suffix.lower() == ".json":
                 try:
                     with open(target_path, "w", encoding="utf-8") as f:
@@ -98,49 +186,56 @@ class ComfyService:
         """Reset workflow to original default template."""
         if DEFAULT_WORKFLOW_TEMPLATE.exists():
             shutil.copy(DEFAULT_WORKFLOW_TEMPLATE, WORKFLOW_FILE)
+        self._cached_workflow = None
         self.set_active_workflow_id("default")
         return self.load_workflow_template()
 
     def get_active_workflow_id(self) -> str:
         """Get currently active workflow ID."""
+        if self._cached_active_id is not None:
+            return self._cached_active_id
         id_file = DATA_DIR / "active_workflow_id.txt"
         if id_file.exists():
             try:
-                return id_file.read_text(encoding="utf-8").strip()
+                self._cached_active_id = id_file.read_text(encoding="utf-8").strip() or "default"
+                return self._cached_active_id
             except Exception:
                 pass
         return "default"
 
     def set_active_workflow_id(self, workflow_id: str):
         """Save active workflow ID."""
+        self._cached_active_id = workflow_id
         id_file = DATA_DIR / "active_workflow_id.txt"
         try:
             id_file.write_text(workflow_id, encoding="utf-8")
         except Exception as e:
             logger.warning(f"Failed to write active workflow ID: {e}")
 
-    async def list_available_workflows(self) -> List[Dict[str, Any]]:
-        """List workflows from default template, ComfyUI server (/userdata), and local workflows dir."""
-        active_id = self.get_active_workflow_id()
-        workflows = [
-            {
-                "id": "default",
-                "name": "Default SD 1.5 Workflow",
-                "source": "default",
-                "filename": "default_workflow_api.json",
-                "is_active": active_id == "default",
-            }
-        ]
+    async def _discover_comfy_users(self, client: httpx.AsyncClient) -> List[str]:
+        """Discover ComfyUI user IDs for userdata endpoint headers."""
+        try:
+            user_res = await client.get(f"{self.comfy_url}/users", timeout=3.0)
+            if user_res.status_code == 200:
+                users_data = user_res.json()
+                if isinstance(users_data, dict) and users_data:
+                    return list(users_data.keys())
+                if isinstance(users_data, list) and users_data:
+                    return [u if isinstance(u, str) else u.get("id", "default") for u in users_data]
+        except Exception:
+            pass
+        return ["default"]
 
-        # 1. Check all local candidate directories (workflows/, config/, data/, appdata/)
-        self._local_workflow_paths = {}
+    def _scan_local_workflows_sync(self, active_id: str) -> Tuple[Dict[str, Path], List[Dict[str, Any]]]:
+        """Scan local search directories for workflow JSON/PNG/WebP files."""
+        local_paths: Dict[str, Path] = {}
         discovered_local = set()
+        local_workflows: List[Dict[str, Any]] = []
 
         for search_dir in WORKFLOW_SEARCH_DIRS:
             try:
                 if not search_dir.exists():
                     continue
-                # Search directory and subdirectories for *.json, *.png, *.webp
                 for p in search_dir.rglob("*"):
                     if not p.is_file():
                         continue
@@ -156,15 +251,15 @@ class ComfyService:
                     discovered_local.add(str(resolved))
 
                     wid = f"local:{p.name}"
-                    if wid in self._local_workflow_paths:
+                    if wid in local_paths:
                         wid = f"local:{p.parent.name}_{p.name}"
 
-                    self._local_workflow_paths[wid] = resolved
+                    local_paths[wid] = resolved
                     display_name = p.stem.replace("_", " ").title()
                     icon = "🖼️" if suffix in (".png", ".webp") else "📜"
                     parent_tag = f" ({p.parent.name})" if p.parent != WORKFLOWS_DIR else ""
 
-                    workflows.append({
+                    local_workflows.append({
                         "id": wid,
                         "name": f"{icon} {display_name}{parent_tag}",
                         "source": "local",
@@ -175,97 +270,102 @@ class ComfyService:
             except Exception as e:
                 logger.debug(f"Error scanning workflow dir {search_dir}: {e}")
 
-        # 2. Check ComfyUI server userdata endpoints
+        return local_paths, local_workflows
+
+    async def list_available_workflows(self) -> List[Dict[str, Any]]:
+        """List workflows from default template, ComfyUI server (/userdata), and local workflows dir."""
+        active_id = self.get_active_workflow_id()
+        workflows = [
+            {
+                "id": "default",
+                "name": "Default SD 1.5 Workflow",
+                "source": "default",
+                "filename": "default_workflow_api.json",
+                "is_active": active_id == "default",
+            }
+        ]
+
+        # 1. Check all local candidate directories off the event loop
+        local_paths, local_wfs = await asyncio.to_thread(self._scan_local_workflows_sync, active_id)
+        self._local_workflow_paths = local_paths
+        workflows.extend(local_wfs)
+
+        # 2. Check ComfyUI server userdata endpoints concurrently
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                # First discover users (default, plus any multi-user IDs)
-                user_ids = ["default"]
+            client = self._get_http_client()
+            user_ids = await self._discover_comfy_users(client)
+            discovered_filenames = set()
+
+            async def _probe_url(url: str, headers: Optional[Dict[str, str]] = None):
                 try:
-                    user_res = await client.get(f"{self.comfy_url}/users")
-                    if user_res.status_code == 200:
-                        users_data = user_res.json()
-                        if isinstance(users_data, dict):
-                            user_ids = list(users_data.keys())
-                        elif isinstance(users_data, list):
-                            user_ids = [u if isinstance(u, str) else u.get("id", "default") for u in users_data]
+                    return await client.get(url, headers=headers, timeout=3.0)
                 except Exception:
-                    pass
+                    return None
 
-                discovered_filenames = set()
+            for uid in user_ids:
+                headers = {"comfy-user": uid}
+                probe_urls = [
+                    f"{self.comfy_url}/v2/userdata?path=workflows",
+                    f"{self.comfy_url}/userdata?dir=workflows&recurse=true",
+                    f"{self.comfy_url}/userdata?dir=workflows",
+                    f"{self.comfy_url}/api/userdata?dir=workflows/",
+                    f"{self.comfy_url}/v2/userdata?path=",
+                    f"{self.comfy_url}/userdata",
+                ]
 
-                for uid in user_ids:
-                    headers = {"comfy-user": uid}
-                    # Test various paths and endpoints
-                    probe_urls = [
-                        f"{self.comfy_url}/v2/userdata?path=workflows",
-                        f"{self.comfy_url}/v2/userdata?path=",
-                        f"{self.comfy_url}/userdata?dir=workflows&recurse=true",
-                        f"{self.comfy_url}/userdata?dir=workflows/&recurse=true",
-                        f"{self.comfy_url}/userdata?dir=&recurse=true",
-                        f"{self.comfy_url}/userdata?dir=workflows",
-                        f"{self.comfy_url}/userdata?dir=workflows/",
-                        f"{self.comfy_url}/api/userdata?dir=workflows/",
-                        f"{self.comfy_url}/userdata",
-                    ]
+                responses = await asyncio.gather(*(_probe_url(u, headers) for u in probe_urls))
+                for res in responses:
+                    if not res or res.status_code != 200:
+                        continue
+                    try:
+                        data = res.json()
+                    except Exception:
+                        continue
 
-                    for url in probe_urls:
-                        try:
-                            res = await client.get(url, headers=headers)
-                            if res.status_code == 200:
-                                data = res.json()
-                                items = []
-                                if isinstance(data, list):
-                                    items = data
-                                elif isinstance(data, dict):
-                                    items = data.get("files", []) or data.get("items", []) or []
+                    items = data if isinstance(data, list) else (data.get("files") or data.get("items") or []) if isinstance(data, dict) else []
+                    for item in items:
+                        raw_path = ""
+                        if isinstance(item, dict):
+                            if item.get("type") == "directory":
+                                continue
+                            raw_path = item.get("path") or item.get("name", "")
+                        elif isinstance(item, str):
+                            raw_path = item
 
-                                for item in items:
-                                    # v2/userdata item: {"name": "foo.json", "type": "file", "path": "workflows/foo.json"}
-                                    # userdata item: "workflows/foo.json" or "foo.json"
-                                    raw_path = ""
-                                    if isinstance(item, dict):
-                                        if item.get("type") == "directory":
-                                            continue
-                                        raw_path = item.get("path") or item.get("name", "")
-                                    elif isinstance(item, str):
-                                        raw_path = item
+                        if raw_path.lower().endswith(".json"):
+                            clean_name = raw_path.replace("workflows/", "").replace("workflows\\", "").replace("\\", "/")
+                            if clean_name not in discovered_filenames:
+                                discovered_filenames.add(clean_name)
+                                wid = f"server:{clean_name}"
+                                display_name = Path(clean_name).stem.replace("_", " ").title()
+                                workflows.append({
+                                    "id": wid,
+                                    "name": f"☁️ {display_name}",
+                                    "source": "server",
+                                    "filename": clean_name,
+                                    "is_active": active_id == wid,
+                                })
 
-                                    if raw_path.lower().endswith(".json"):
-                                        clean_name = raw_path.replace("workflows/", "").replace("workflows\\", "").replace("\\", "/")
-                                        if clean_name not in discovered_filenames:
-                                            discovered_filenames.add(clean_name)
-                                            wid = f"server:{clean_name}"
-                                            display_name = Path(clean_name).stem.replace("_", " ").title()
-                                            workflows.append({
-                                                "id": wid,
-                                                "name": f"☁️ {display_name}",
-                                                "source": "server",
-                                                "filename": clean_name,
-                                                "is_active": active_id == wid,
-                                            })
-                        except Exception as e:
-                            logger.debug(f"Error querying {url}: {e}")
-
-                # Also probe PySSSSS (ComfyUI-Custom-Scripts workflow manager)
+            # Also probe PySSSSS (ComfyUI-Custom-Scripts workflow manager)
+            pysssss_res = await _probe_url(f"{self.comfy_url}/pysssss/workflows")
+            if pysssss_res and pysssss_res.status_code == 200:
                 try:
-                    res = await client.get(f"{self.comfy_url}/pysssss/workflows")
-                    if res.status_code == 200:
-                        pysssss_items = res.json()
-                        if isinstance(pysssss_items, list):
-                            for p_item in pysssss_items:
-                                p_name = p_item if isinstance(p_item, str) else p_item.get("name", "")
-                                if p_name.lower().endswith(".json"):
-                                    clean_name = p_name.replace("\\", "/")
-                                    if clean_name not in discovered_filenames:
-                                        discovered_filenames.add(clean_name)
-                                        wid = f"server:{clean_name}"
-                                        workflows.append({
-                                            "id": wid,
-                                            "name": f"📜 {Path(clean_name).stem.replace('_', ' ').title()}",
-                                            "source": "server",
-                                            "filename": clean_name,
-                                            "is_active": active_id == wid,
-                                        })
+                    pysssss_items = pysssss_res.json()
+                    if isinstance(pysssss_items, list):
+                        for p_item in pysssss_items:
+                            p_name = p_item if isinstance(p_item, str) else p_item.get("name", "")
+                            if p_name.lower().endswith(".json"):
+                                clean_name = p_name.replace("\\", "/")
+                                if clean_name not in discovered_filenames:
+                                    discovered_filenames.add(clean_name)
+                                    wid = f"server:{clean_name}"
+                                    workflows.append({
+                                        "id": wid,
+                                        "name": f"📜 {Path(clean_name).stem.replace('_', ' ').title()}",
+                                        "source": "server",
+                                        "filename": clean_name,
+                                        "is_active": active_id == wid,
+                                    })
                 except Exception:
                     pass
 
@@ -284,94 +384,53 @@ class ComfyService:
             return {}
 
         if workflow_id.startswith("local:"):
-            target_path = self._local_workflow_paths.get(workflow_id)
+            target_path = self._resolve_local_workflow_path(workflow_id)
             filename = workflow_id.replace("local:", "", 1)
-
-            if not target_path or not target_path.exists():
-                for d in WORKFLOW_SEARCH_DIRS:
-                    if not d.exists():
-                        continue
-                    candidate = d / filename
-                    if candidate.exists() and candidate.is_file():
-                        target_path = candidate
-                        break
-                    for p in d.rglob(filename):
-                        if p.exists() and p.is_file():
-                            target_path = p
-                            break
-                    if target_path:
-                        break
 
             if not target_path or not target_path.exists():
                 raise FileNotFoundError(f"Local workflow not found: {filename}")
 
             if target_path.suffix.lower() in (".png", ".webp"):
-                from PIL import Image
                 with Image.open(target_path) as img:
-                    info = getattr(img, "info", {}) or {}
-                    prompt_str = info.get("prompt")
-                    workflow_str = info.get("workflow")
-                    if prompt_str:
-                        return json.loads(prompt_str) if isinstance(prompt_str, str) else prompt_str
-                    if workflow_str:
-                        wf = json.loads(workflow_str) if isinstance(workflow_str, str) else workflow_str
-                        if isinstance(wf, dict) and "extra" in wf and "prompt" in wf["extra"]:
-                            return wf["extra"]["prompt"]
-                        return wf
-                    raise ValueError(f"No ComfyUI metadata found inside image: {target_path.name}")
+                    return _extract_workflow_from_image(img)
             else:
                 with open(target_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, dict):
-                        if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
-                            return data["extra"]["prompt"]
-                        if "prompt" in data and isinstance(data["prompt"], dict):
-                            return data["prompt"]
-                    return data
-
+                    return _unwrap_workflow_json(json.load(f))
 
         if workflow_id.startswith("server:"):
             filename = workflow_id.replace("server:", "", 1)
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                # Find candidate user headers
-                user_ids = ["default"]
+            client = self._get_http_client()
+            user_ids = await self._discover_comfy_users(client)
+
+            candidate_urls = [
+                f"{self.comfy_url}/v2/userdata/workflows/{filename}",
+                f"{self.comfy_url}/userdata/workflows/{filename}",
+                f"{self.comfy_url}/v2/userdata/{filename}",
+                f"{self.comfy_url}/userdata/{filename}",
+                f"{self.comfy_url}/pysssss/workflows/{filename}",
+                f"{self.comfy_url}/api/userdata/workflows/{filename}",
+                f"{self.comfy_url}/userdata?file=workflows/{filename}",
+                f"{self.comfy_url}/userdata?file={filename}",
+            ]
+
+            async def _try_get(url: str, headers: Dict[str, str]):
                 try:
-                    user_res = await client.get(f"{self.comfy_url}/users")
-                    if user_res.status_code == 200:
-                        u_data = user_res.json()
-                        if isinstance(u_data, dict):
-                            user_ids = list(u_data.keys())
-                        elif isinstance(u_data, list):
-                            user_ids = [u if isinstance(u, str) else u.get("id", "default") for u in u_data]
+                    res = await client.get(url, headers=headers, timeout=5.0)
+                    if res.status_code == 200:
+                        data = res.json()
+                        if isinstance(data, dict):
+                            return _unwrap_workflow_json(data)
                 except Exception:
                     pass
+                return None
 
-                candidate_urls = [
-                    f"{self.comfy_url}/v2/userdata/workflows/{filename}",
-                    f"{self.comfy_url}/v2/userdata/{filename}",
-                    f"{self.comfy_url}/userdata/workflows/{filename}",
-                    f"{self.comfy_url}/userdata/{filename}",
-                    f"{self.comfy_url}/pysssss/workflows/{filename}",
-                    f"{self.comfy_url}/api/userdata/workflows/{filename}",
-                    f"{self.comfy_url}/userdata?file=workflows/{filename}",
-                    f"{self.comfy_url}/userdata?file={filename}",
-                ]
+            for uid in user_ids:
+                headers = {"comfy-user": uid}
+                results = await asyncio.gather(*(_try_get(u, headers) for u in candidate_urls))
+                for wf in results:
+                    if wf:
+                        return wf
 
-                for uid in user_ids:
-                    headers = {"comfy-user": uid}
-                    for url in candidate_urls:
-                        try:
-                            res = await client.get(url, headers=headers)
-                            if res.status_code == 200:
-                                data = res.json()
-                                if isinstance(data, dict):
-                                    if "extra" in data and isinstance(data["extra"], dict) and "prompt" in data["extra"]:
-                                        return data["extra"]["prompt"]
-                                    if "prompt" in data and isinstance(data["prompt"], dict):
-                                        return data["prompt"]
-                                    return data
-                        except Exception:
-                            continue
             raise FileNotFoundError(f"Server workflow not found: {filename}")
 
         raise ValueError(f"Unknown workflow id: {workflow_id}")
@@ -381,59 +440,27 @@ class ComfyService:
         Import a workflow from an uploaded .json or .png file.
         Saves into WORKFLOWS_DIR, activates it, and returns workflow dict and metadata.
         """
-        import io
-        from PIL import Image
-
         safe_stem = Path(filename).stem
-        # Clean stem to valid filename
-        clean_stem = re.sub(r'[^a-zA-Z0-9_\-\s]', '', safe_stem).strip().replace(' ', '_')
-        if not clean_stem:
-            clean_stem = "imported_workflow"
+        clean_stem = _CLEAN_STEM_RE.sub("", safe_stem).strip().replace(" ", "_") or "imported_workflow"
 
         target_json_name = f"{clean_stem}.json"
         target_path = WORKFLOWS_DIR / target_json_name
 
-        workflow_data: Dict[str, Any] = {}
-
-        if filename.lower().endswith(".json"):
+        lower_name = filename.lower()
+        if lower_name.endswith(".json"):
             try:
                 parsed = json.loads(content_bytes.decode("utf-8"))
             except Exception as e:
                 raise ValueError(f"Invalid JSON file: {e}")
 
-            if isinstance(parsed, dict):
-                if "extra" in parsed and isinstance(parsed["extra"], dict) and "prompt" in parsed["extra"]:
-                    workflow_data = parsed["extra"]["prompt"]
-                elif "prompt" in parsed and isinstance(parsed["prompt"], dict):
-                    workflow_data = parsed["prompt"]
-                else:
-                    workflow_data = parsed
-            else:
+            if not isinstance(parsed, dict):
                 raise ValueError("JSON content must be a workflow dictionary / graph.")
+            workflow_data = _unwrap_workflow_json(parsed)
 
-        elif filename.lower().endswith((".png", ".webp")):
+        elif lower_name.endswith((".png", ".webp")):
             try:
                 with Image.open(io.BytesIO(content_bytes)) as img:
-                    raw_info = getattr(img, "info", {}) or {}
-                    prompt_str = raw_info.get("prompt")
-                    workflow_str = raw_info.get("workflow")
-
-                    if prompt_str:
-                        if isinstance(prompt_str, str):
-                            workflow_data = json.loads(prompt_str)
-                        else:
-                            workflow_data = prompt_str
-                    elif workflow_str:
-                        if isinstance(workflow_str, str):
-                            wf_dict = json.loads(workflow_str)
-                        else:
-                            wf_dict = workflow_str
-                        if isinstance(wf_dict, dict) and "extra" in wf_dict and "prompt" in wf_dict["extra"]:
-                            workflow_data = wf_dict["extra"]["prompt"]
-                        else:
-                            workflow_data = wf_dict
-                    else:
-                        raise ValueError("No embedded ComfyUI workflow or prompt found in PNG metadata.")
+                    workflow_data = _extract_workflow_from_image(img)
             except Exception as e:
                 raise ValueError(f"Failed to extract workflow from image: {e}")
         else:
@@ -449,6 +476,7 @@ class ComfyService:
         # Activate imported workflow
         self.save_workflow_template(workflow_data)
         wid = f"local:{target_json_name}"
+        self._local_workflow_paths[wid] = target_path.resolve()
         self.set_active_workflow_id(wid)
 
         display_name = clean_stem.replace("_", " ").title()
@@ -462,7 +490,7 @@ class ComfyService:
     async def save_workflow(self, filename: str, workflow_dict: Dict[str, Any], destination: str = "local") -> bool:
         """Save workflow to local storage or ComfyUI server."""
         clean_name = filename if filename.endswith(".json") else f"{filename}.json"
-        
+
         # Always save locally in WORKFLOWS_DIR
         target = WORKFLOWS_DIR / clean_name
         with open(target, "w", encoding="utf-8") as f:
@@ -470,13 +498,14 @@ class ComfyService:
 
         if destination == "server":
             try:
-                async with httpx.AsyncClient(timeout=6.0) as client:
-                    res = await client.post(
-                        f"{self.comfy_url}/userdata/workflows/{clean_name}",
-                        headers={"comfy-user": "default"},
-                        json=workflow_dict
-                    )
-                    return res.status_code in (200, 201)
+                client = self._get_http_client()
+                res = await client.post(
+                    f"{self.comfy_url}/userdata/workflows/{clean_name}",
+                    headers={"comfy-user": "default"},
+                    json=workflow_dict,
+                    timeout=6.0,
+                )
+                return res.status_code in (200, 201)
             except Exception as e:
                 logger.error(f"Failed to post workflow to ComfyUI server: {e}")
                 return False
@@ -486,10 +515,10 @@ class ComfyService:
     async def check_health(self) -> Dict[str, Any]:
         """Check ComfyUI server connectivity and stats."""
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                res = await client.get(f"{self.comfy_url}/system_stats")
-                if res.status_code == 200:
-                    return {"connected": True, "stats": res.json(), "url": self.comfy_url}
+            client = self._get_http_client()
+            res = await client.get(f"{self.comfy_url}/system_stats", timeout=3.0)
+            if res.status_code == 200:
+                return {"connected": True, "stats": res.json(), "url": self.comfy_url}
         except Exception as e:
             return {"connected": False, "error": str(e), "url": self.comfy_url}
         return {"connected": False, "url": self.comfy_url}
@@ -497,14 +526,14 @@ class ComfyService:
     async def get_checkpoints(self) -> List[str]:
         """Fetch list of available checkpoints from ComfyUI."""
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                res = await client.get(f"{self.comfy_url}/object_info/CheckpointLoaderSimple")
-                if res.status_code == 200:
-                    data = res.json()
-                    input_info = data.get("CheckpointLoaderSimple", {}).get("input", {}).get("required", {})
-                    ckpts = input_info.get("ckpt_name", [[]])[0]
-                    if isinstance(ckpts, list):
-                        return ckpts
+            client = self._get_http_client()
+            res = await client.get(f"{self.comfy_url}/object_info/CheckpointLoaderSimple", timeout=4.0)
+            if res.status_code == 200:
+                data = res.json()
+                input_info = data.get("CheckpointLoaderSimple", {}).get("input", {}).get("required", {})
+                ckpts = input_info.get("ckpt_name", [[]])[0]
+                if isinstance(ckpts, list):
+                    return ckpts
         except Exception as e:
             logger.debug(f"Could not fetch checkpoints from ComfyUI: {e}")
         return []
@@ -539,11 +568,9 @@ class ComfyService:
 
         # Find KSampler node(s)
         ksampler_node = None
-        ksampler_id = None
-        for nid, node in prompt_graph.items():
+        for node in prompt_graph.values():
             if isinstance(node, dict) and "KSampler" in node.get("class_type", ""):
                 ksampler_node = node
-                ksampler_id = nid
                 break
 
         pos_injected = False
@@ -575,79 +602,44 @@ class ComfyService:
             if isinstance(pos_link, list) and len(pos_link) > 0:
                 pos_id = str(pos_link[0])
                 if pos_id in prompt_graph and "inputs" in prompt_graph[pos_id]:
-                    p_node = prompt_graph[pos_id]
-                    p_inputs = p_node.setdefault("inputs", {})
-                    if "text" in p_inputs or ("text_g" not in p_inputs and "text_l" not in p_inputs):
-                        p_inputs["text"] = positive_prompt
-                    if "text_g" in p_inputs:
-                        p_inputs["text_g"] = positive_prompt
-                    if "text_l" in p_inputs:
-                        p_inputs["text_l"] = positive_prompt
+                    _set_clip_prompt_inputs(prompt_graph[pos_id].setdefault("inputs", {}), positive_prompt)
                     pos_injected = True
 
             neg_link = inputs.get("negative")
             if isinstance(neg_link, list) and len(neg_link) > 0:
                 neg_id = str(neg_link[0])
                 if neg_id in prompt_graph and "inputs" in prompt_graph[neg_id]:
-                    n_node = prompt_graph[neg_id]
-                    n_inputs = n_node.setdefault("inputs", {})
-                    if "text" in n_inputs or ("text_g" not in n_inputs and "text_l" not in n_inputs):
-                        n_inputs["text"] = negative_prompt
-                    if "text_g" in n_inputs:
-                        n_inputs["text_g"] = negative_prompt
-                    if "text_l" in n_inputs:
-                        n_inputs["text_l"] = negative_prompt
+                    _set_clip_prompt_inputs(prompt_graph[neg_id].setdefault("inputs", {}), negative_prompt)
                     neg_injected = True
 
         # Fallback for prompt injection if not wired directly via KSampler
         if not pos_injected or not neg_injected:
-            clip_nodes = []
-            for nid, node in prompt_graph.items():
-                if isinstance(node, dict) and ("CLIPTextEncode" in node.get("class_type", "") or "CLIP" in node.get("class_type", "")):
-                    clip_nodes.append((nid, node))
+            clip_nodes = [
+                (nid, node)
+                for nid, node in prompt_graph.items()
+                if isinstance(node, dict) and ("CLIPTextEncode" in node.get("class_type", "") or "CLIP" in node.get("class_type", ""))
+            ]
 
-            for nid, node in clip_nodes:
+            for _, node in clip_nodes:
                 title = str(node.get("_meta", {}).get("title", "")).lower()
                 n_inputs = node.setdefault("inputs", {})
                 if not pos_injected and ("positive" in title or "pos" in title):
-                    if "text" in n_inputs or ("text_g" not in n_inputs and "text_l" not in n_inputs):
-                        n_inputs["text"] = positive_prompt
-                    if "text_g" in n_inputs:
-                        n_inputs["text_g"] = positive_prompt
-                    if "text_l" in n_inputs:
-                        n_inputs["text_l"] = positive_prompt
+                    _set_clip_prompt_inputs(n_inputs, positive_prompt)
                     pos_injected = True
                 elif not neg_injected and ("negative" in title or "neg" in title):
-                    if "text" in n_inputs or ("text_g" not in n_inputs and "text_l" not in n_inputs):
-                        n_inputs["text"] = negative_prompt
-                    if "text_g" in n_inputs:
-                        n_inputs["text_g"] = negative_prompt
-                    if "text_l" in n_inputs:
-                        n_inputs["text_l"] = negative_prompt
+                    _set_clip_prompt_inputs(n_inputs, negative_prompt)
                     neg_injected = True
 
             if not pos_injected and len(clip_nodes) > 0:
-                c0_in = clip_nodes[0][1].setdefault("inputs", {})
-                if "text" in c0_in or ("text_g" not in c0_in and "text_l" not in c0_in):
-                    c0_in["text"] = positive_prompt
-                if "text_g" in c0_in:
-                    c0_in["text_g"] = positive_prompt
-                if "text_l" in c0_in:
-                    c0_in["text_l"] = positive_prompt
+                _set_clip_prompt_inputs(clip_nodes[0][1].setdefault("inputs", {}), positive_prompt)
                 pos_injected = True
             if not neg_injected and len(clip_nodes) > 1:
-                c1_in = clip_nodes[1][1].setdefault("inputs", {})
-                if "text" in c1_in or ("text_g" not in c1_in and "text_l" not in c1_in):
-                    c1_in["text"] = negative_prompt
-                if "text_g" in c1_in:
-                    c1_in["text_g"] = negative_prompt
-                if "text_l" in c1_in:
-                    c1_in["text_l"] = negative_prompt
+                _set_clip_prompt_inputs(clip_nodes[1][1].setdefault("inputs", {}), negative_prompt)
                 neg_injected = True
 
         # Checkpoint Model injection
         if extra.get("ckpt_name"):
-            for nid, node in prompt_graph.items():
+            for node in prompt_graph.values():
                 if isinstance(node, dict):
                     c_type = node.get("class_type", "")
                     inputs = node.setdefault("inputs", {})
@@ -664,69 +656,56 @@ class ComfyService:
             modified_nodes = set()
 
             # 1. Update upstream PrimitiveNodes linked to width or height
-            for nid, node in list(prompt_graph.items()):
+            for node in prompt_graph.values():
                 if not isinstance(node, dict):
                     continue
                 inputs = node.setdefault("inputs", {})
-                for k, v in list(inputs.items()):
+                for k, v in inputs.items():
                     if isinstance(v, list) and len(v) > 0 and str(v[0]) in prompt_graph:
                         k_lower = k.lower()
-                        p_node = prompt_graph[str(v[0])]
-                        p_in = p_node.setdefault("inputs", {})
-                        if "width" in k_lower:
-                            if "value" in p_in and target_width:
+                        p_id = str(v[0])
+                        p_in = prompt_graph[p_id].setdefault("inputs", {})
+                        if "width" in k_lower and target_width:
+                            if "value" in p_in:
                                 p_in["value"] = target_width
-                                modified_nodes.add(str(v[0]))
-                            if "width" in p_in and target_width:
+                                modified_nodes.add(p_id)
+                            if "width" in p_in:
                                 p_in["width"] = target_width
-                                modified_nodes.add(str(v[0]))
-                        elif "height" in k_lower:
-                            if "value" in p_in and target_height:
+                                modified_nodes.add(p_id)
+                        elif "height" in k_lower and target_height:
+                            if "value" in p_in:
                                 p_in["value"] = target_height
-                                modified_nodes.add(str(v[0]))
-                            if "height" in p_in and target_height:
+                                modified_nodes.add(p_id)
+                            if "height" in p_in:
                                 p_in["height"] = target_height
-                                modified_nodes.add(str(v[0]))
+                                modified_nodes.add(p_id)
 
             # 2. Comprehensive node update: Dimensions, Aspect Ratio presets, and Latent generators
-            for nid, node in list(prompt_graph.items()):
+            for nid, node in prompt_graph.items():
                 if not isinstance(node, dict):
                     continue
                 c_type = node.get("class_type", "")
                 inputs = node.setdefault("inputs", {})
 
-                # Check if this node handles dimensions
                 is_dim_node = (
-                    c_type in [
-                        "EmptyLatentImage",
-                        "SDXLEmptyLatentImage",
-                        "EmptySD3LatentImage",
-                        "EmptyLatentImagePresets",
-                        "EmptyMochiLatentVideo",
-                        "EmptyHunyuanLatentVideo",
-                        "EmptyLTXVLatentVideo",
-                        "CR SDXL Aspect Ratio",
-                        "CR Aspect Ratio",
-                        "CR SD1.5 Aspect Ratio",
-                    ]
-                    or any(k in c_type for k in ["EmptyLatent", "EmptySD", "SDXLEmptyLatent", "LatentImage", "Aspect", "Resolution", "Size"])
-                    or any(k in inputs for k in ["width", "height", "empty_latent_width", "empty_latent_height", "aspect_ratio", "resolution"])
+                    c_type in _DIM_NODE_TYPES
+                    or any(k in c_type for k in _DIM_CLASS_KEYWORDS)
+                    or any(k in inputs for k in _DIM_INPUT_KEYS)
                 )
 
                 if is_dim_node:
-                    # Update explicit numeric width keys
-                    for wk in ["width", "empty_latent_width", "target_width", "original_width", "max_width"]:
-                        if wk in inputs and target_width:
-                            inputs[wk] = target_width
-                            modified_nodes.add(nid)
-                    # Update explicit numeric height keys
-                    for hk in ["height", "empty_latent_height", "target_height", "original_height", "max_height"]:
-                        if hk in inputs and target_height:
-                            inputs[hk] = target_height
-                            modified_nodes.add(nid)
+                    if target_width:
+                        for wk in _WIDTH_KEYS:
+                            if wk in inputs:
+                                inputs[wk] = target_width
+                                modified_nodes.add(nid)
+                    if target_height:
+                        for hk in _HEIGHT_KEYS:
+                            if hk in inputs:
+                                inputs[hk] = target_height
+                                modified_nodes.add(nid)
 
-                    # Aspect Ratio custom override (Critical for CR SDXL Aspect Ratio, CR Aspect Ratio, etc.)
-                    for ark in ["aspect_ratio", "aspect_ratio_preset", "aspect"]:
+                    for ark in ("aspect_ratio", "aspect_ratio_preset", "aspect"):
                         if ark in inputs:
                             inputs[ark] = "custom"
                             modified_nodes.add(nid)
@@ -734,15 +713,12 @@ class ComfyService:
                         inputs["swap_dimensions"] = "Off"
                         modified_nodes.add(nid)
 
-                    # Update resolution strings (e.g. "1024x1024 (1:1)" or "1024x1024")
-                    for rk in ["resolution", "dimensions", "preset", "size"]:
-                        if rk in inputs and isinstance(inputs[rk], str):
-                            if re.search(r'\d+\s*[xX*×]\s*\d+', inputs[rk]):
-                                inputs[rk] = f"{target_width}x{target_height}"
-                                modified_nodes.add(nid)
+                    for rk in ("resolution", "dimensions", "preset", "size"):
+                        if rk in inputs and isinstance(inputs[rk], str) and _RES_STR_RE.search(inputs[rk]):
+                            inputs[rk] = f"{target_width}x{target_height}"
+                            modified_nodes.add(nid)
 
-                    # Ensure empty latent nodes have width and height populated
-                    if any(k in c_type for k in ["EmptyLatent", "EmptySD", "SDXLEmptyLatent", "LatentImage"]):
+                    if any(k in c_type for k in ("EmptyLatent", "EmptySD", "SDXLEmptyLatent", "LatentImage")):
                         if target_width:
                             inputs["width"] = target_width
                         if target_height:
@@ -752,14 +728,14 @@ class ComfyService:
                 # 3. Synchronize SDXL conditioning dimensions (CLIPTextEncodeSDXL, etc.)
                 if "CLIPTextEncodeSDXL" in c_type or "SDXL" in c_type:
                     if target_width:
-                        if "width" in inputs: inputs["width"] = target_width
-                        if "target_width" in inputs: inputs["target_width"] = target_width
-                        if "original_width" in inputs: inputs["original_width"] = target_width
+                        for wk in ("width", "target_width", "original_width"):
+                            if wk in inputs:
+                                inputs[wk] = target_width
                         modified_nodes.add(nid)
                     if target_height:
-                        if "height" in inputs: inputs["height"] = target_height
-                        if "target_height" in inputs: inputs["target_height"] = target_height
-                        if "original_height" in inputs: inputs["original_height"] = target_height
+                        for hk in ("height", "target_height", "original_height"):
+                            if hk in inputs:
+                                inputs[hk] = target_height
                         modified_nodes.add(nid)
 
             if target_width:
@@ -779,26 +755,26 @@ class ComfyService:
             "prompt": prompt_graph,
             "client_id": client_id,
         }
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            res = await client.post(f"{self.comfy_url}/prompt", json=payload)
-            if res.status_code != 200:
-                text = res.text
-                raise RuntimeError(f"ComfyUI rejected prompt ({res.status_code}): {text}")
-            return res.json()
+        client = self._get_http_client()
+        res = await client.post(f"{self.comfy_url}/prompt", json=payload, timeout=10.0)
+        if res.status_code != 200:
+            raise RuntimeError(f"ComfyUI rejected prompt ({res.status_code}): {res.text}")
+        return res.json()
 
     async def interrupt(self) -> bool:
         """Interrupt current generation on ComfyUI and clear queued prompts."""
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                try:
-                    await client.post(f"{self.comfy_url}/queue", json={"clear": True})
-                except Exception:
-                    pass
-                res = await client.post(f"{self.comfy_url}/interrupt")
-                return res.status_code == 200
+            client = self._get_http_client()
+            try:
+                await client.post(f"{self.comfy_url}/queue", json={"clear": True}, timeout=4.0)
+            except Exception:
+                pass
+            res = await client.post(f"{self.comfy_url}/interrupt", timeout=4.0)
+            return res.status_code == 200
         except Exception as e:
             logger.error(f"Error interrupting ComfyUI: {e}")
             return False
+
 
     def get_ws_url(self, client_id: str) -> str:
         """Derive WebSocket URL from HTTP ComfyUI URL."""
