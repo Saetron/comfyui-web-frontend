@@ -7,18 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.1.1] - 2026-10-20
 
-### ⚙️ CI / Maintenance
-- Added Dependabot configuration (`.github/dependabot.yml`) for automated weekly vulnerability and dependency updates covering `pip`, `docker`, and `github-actions`.
-- Upgraded GitHub Actions workflow dependencies in `.github/workflows/docker-publish.yml`:
+### ⚙️ CI / Build Workflow
+- **Restricted Build & Publish Trigger**: Modified `.github/workflows/docker-publish.yml` to trigger image publishing strictly on explicit version tags (`v*.*.*`), preventing automatic publishing/bumping on regular branch pushes to `main`.
+- **Pinned Docker Release Tags**: Set the `:latest` and semver container image tags to be created exclusively during formal tag releases.
+- **Automated Dependency Updates**: Added Dependabot configuration (`.github/dependabot.yml`) for automated weekly vulnerability and dependency updates covering `pip`, `docker`, and `github-actions`.
+- **Pinned Python Base Image**: Configured Dependabot rule to pin the stable LTS `python:3.11-slim` base image and ignore experimental/unreleased versions.
+- **Upgraded GitHub Actions**:
   - `actions/checkout` to `v7`
   - `docker/build-push-action` to `v7`
   - `docker/metadata-action` to `v6`
   - `docker/setup-buildx-action` to `v4`
   - `docker/login-action` to `v4`
   - `docker/setup-qemu-action` to `v4`
-- Upgraded Python dependencies in `requirements.txt`:
+- **Upgraded Python Dependencies**:
   - `fastapi` to `>=0.143.3`
   - `uvicorn[standard]` to `>=0.54.0`
   - `websockets` to `>=17.2`
