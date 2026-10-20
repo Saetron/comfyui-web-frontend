@@ -29,6 +29,7 @@ Key Goals:
 ├── Dockerfile                   # Python 3.11-slim container with healthcheck
 ├── docker-compose.yml           # Compose setup with volume mounts & port 8080
 ├── requirements.txt             # Python dependencies (FastAPI, uvicorn, httpx, websockets, pillow, watchfiles)
+├── CHANGELOG.md                 # Project changelog following Keep a Changelog standard
 ├── .github/workflows/
 │   └── docker-publish.yml       # Multi-arch (amd64/arm64) Docker build & GHCR publish action
 ├── app/
@@ -135,3 +136,4 @@ Key Goals:
    - `COMFYUI_URL=http://host.docker.internal:8188`
    - `DEFAULT_NEGATIVE_PROMPT` sets default negative prompt text across the application.
 4. **Preserve Comments & Docstrings**: Follow repository convention to preserve docstrings and clean type hints.
+5. **Keep a Changelog**: Maintain [`CHANGELOG.md`](./CHANGELOG.md) adhering to the [Keep a Changelog](https://keepachangelog.com/) standard and [Semantic Versioning](https://semver.org/). Document all notable additions, modifications, fixes, and performance improvements under the relevant categories (`Added`, `Changed`, `Fixed`, `Performance`, `Deprecated`, `Removed`). Keep `app/__init__.py`'s `__version__`, git release tags (`vX.Y.Z`), and changelog headings synchronized.
