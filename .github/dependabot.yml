@@ -29,3 +29,6 @@ updates:
       prefix: "docker"
       include: "scope"
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "python"
+        versions: [">= 3.12"]
