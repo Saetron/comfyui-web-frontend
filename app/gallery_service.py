@@ -22,7 +22,13 @@ class GalleryService:
         self._images_cache: Dict[str, Dict[str, Any]] = {}
         self._watcher_task: Optional[asyncio.Task] = None
         self._broadcast_callbacks: List[Callable[[Dict[str, Any]], Any]] = []
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None
+
+    @property
+    def lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     def register_broadcast_callback(self, cb: Callable[[Dict[str, Any]], Any]):
         self._broadcast_callbacks.append(cb)
@@ -47,6 +53,10 @@ class GalleryService:
                 clean_str = clean_str[len(out_str):]
             elif clean_str.lstrip("/").startswith("app/output"):
                 clean_str = clean_str.lstrip("/")[len("app/output"):]
+            elif clean_str.lstrip("/").startswith("output/"):
+                clean_str = clean_str.lstrip("/")[len("output/"):]
+            elif clean_str.lstrip("/").startswith("output"):
+                clean_str = clean_str.lstrip("/")[len("output"):]
 
             rel = Path(clean_str.strip("/\\"))
             target = (self.output_dir / rel).resolve()
@@ -104,7 +114,7 @@ class GalleryService:
 
     async def scan(self):
         """Crawl the output directory on startup to index all images."""
-        async with self._lock:
+        async with self.lock:
             found: Dict[str, Dict[str, Any]] = {}
             if self.output_dir.exists():
                 for root, _, files in os.walk(self.output_dir):
@@ -138,12 +148,17 @@ class GalleryService:
             items.sort(key=lambda x: x["filename"].lower(), reverse=True)
 
         total = len(items)
-        paginated = items[offset : offset + limit]
+        if limit is not None and limit > 0:
+            paginated = items[offset : offset + limit]
+            effective_limit = limit
+        else:
+            paginated = items[offset:]
+            effective_limit = total
 
         return {
             "total": total,
             "offset": offset,
-            "limit": limit,
+            "limit": effective_limit,
             "items": paginated,
         }
 
@@ -169,7 +184,15 @@ class GalleryService:
                 except Exception:
                     pass
 
-            clean_rel = file_path.relative_to(self.output_dir).as_posix()
+            rel_path = file_path.relative_to(self.output_dir)
+            hash_id = hashlib.sha1(str(rel_path).encode("utf-8")).hexdigest()
+            for extra in self.thumbnails_dir.glob(f"{hash_id}_*"):
+                try:
+                    extra.unlink()
+                except Exception:
+                    pass
+
+            clean_rel = rel_path.as_posix()
 
             # Permanently delete file from output dir
             file_path.unlink()
@@ -184,7 +207,7 @@ class GalleryService:
                     pass
 
             # Update cache
-            async with self._lock:
+            async with self.lock:
                 self._images_cache.pop(clean_rel, None)
                 self._images_cache.pop(relative_path, None)
 
@@ -222,7 +245,7 @@ class GalleryService:
                         if p.exists():
                             try:
                                 summary = self._build_item_summary(p)
-                                async with self._lock:
+                                async with self.lock:
                                     self._images_cache[rel_path] = summary
                                 await self.broadcast({
                                     "type": "gallery_item_added",
@@ -232,7 +255,7 @@ class GalleryService:
                                 logger.warning(f"Error handling file change for {p}: {e}")
 
                     elif change == Change.deleted:
-                        async with self._lock:
+                        async with self.lock:
                             self._images_cache.pop(rel_path, None)
                         await self.broadcast({
                             "type": "gallery_item_deleted",

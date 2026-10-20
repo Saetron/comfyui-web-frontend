@@ -33,7 +33,7 @@
 
     <!-- Top Navigation Header -->
     <header class="border-b border-pink-500/20 bg-[#0c0d1b]/85 backdrop-blur-xl sticky top-0 z-30 shadow-lg shadow-black/40">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+        <div class="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-3">
             
             <!-- Logo & Anime Title -->
             <div class="flex items-center space-x-3 shrink-0">
@@ -87,6 +87,22 @@
                 </button>
             </nav>
 
+            <!-- GUI Resolution / Scale Selector -->
+            <div class="hidden sm:flex items-center space-x-1.5 bg-white/5 border border-pink-500/25 rounded-2xl px-2.5 py-1.5 shadow-inner text-xs">
+                <span class="text-pink-300 font-bold flex items-center gap-1 shrink-0" title="GUI Scaling for user screen resolution">
+                    <span>🖥️</span>
+                    <span class="hidden xl:inline text-[11px]">Scale:</span>
+                </span>
+                <select id="gui-scale-select" onchange="setGuiScale(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer">
+                    <option value="auto">Auto (Fit Screen)</option>
+                    <option value="80">80% (Compact)</option>
+                    <option value="90">90%</option>
+                    <option value="100">100%</option>
+                    <option value="110">110%</option>
+                    <option value="125">125% (4K / Large)</option>
+                </select>
+            </div>
+
             <!-- ComfyUI Status Indicator -->
             <div class="flex items-center space-x-2 shrink-0">
                 <div id="comfy-status-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm">
@@ -99,7 +115,7 @@
     </header>
 
     <!-- Main Content Container -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+    <main class="flex-1 w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto p-4 sm:p-6 lg:p-8 2xl:p-10">
 
         <!-- ========================================== -->
         <!-- VIEW 1: GENERATOR VIEW                     -->
@@ -108,7 +124,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
                 <!-- Left Column: Generator Form -->
-                <div class="lg:col-span-6 space-y-5">
+                <div class="lg:col-span-6 xl:col-span-5 2xl:col-span-5 space-y-5">
                     <div class="anime-card p-6 space-y-5">
                         
                         <!-- Danbooru Tag Helper Bar & Quick Tags Drawer -->
@@ -336,7 +352,7 @@
                 </div>
 
                 <!-- Right Column: Generation Status & Live Preview Result -->
-                <div class="lg:col-span-6 space-y-5">
+                <div class="lg:col-span-6 xl:col-span-7 2xl:col-span-7 space-y-5 lg:sticky lg:top-20 lg:self-start">
                     <div class="anime-card p-6 flex flex-col h-full min-h-[480px]">
                         
                         <!-- Header / Status Bar -->
@@ -360,7 +376,7 @@
                         </div>
 
                         <!-- Canvas Image / Placeholder Area -->
-                        <div class="flex-1 mt-4 relative flex items-center justify-center bg-black/40 rounded-2xl border border-pink-500/20 overflow-hidden min-h-[350px]">
+                        <div class="flex-1 mt-4 relative flex items-center justify-center bg-black/40 rounded-2xl border border-pink-500/20 overflow-hidden min-h-[380px] lg:min-h-[500px] xl:min-h-[580px] 2xl:min-h-[700px] max-h-[calc(100vh-14rem)]">
                             
                             <!-- Generation Summoning Animation Overlay -->
                             <div id="preview-generating-loader" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#070814]/85 backdrop-blur-md transition-all duration-300 select-none">
@@ -508,7 +524,7 @@
             </div>
 
             <!-- Gallery Grid Container -->
-            <div id="gallery-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            <div id="gallery-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 min-[2000px]:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
                 <!-- Dynamically populated thumbnail cards -->
             </div>
 
@@ -607,7 +623,7 @@
     <!-- IMAGE DETAIL & METADATA MODAL              -->
     <!-- ========================================== -->
     <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-xl">
-        <div class="glass-modal max-w-6xl w-full h-[90vh] max-h-[850px] rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative">
+        <div class="glass-modal max-w-7xl 2xl:max-w-[92vw] w-full h-[92vh] max-h-[1200px] rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative">
             
             <!-- Close Modal Button -->
             <button onclick="closeImageModal()" class="absolute top-4 right-4 z-30 w-9 h-9 rounded-full bg-black/70 hover:bg-pink-600 text-pink-200 hover:text-white flex items-center justify-center border border-pink-500/30 transition-all">
@@ -651,7 +667,7 @@
             </div>
 
             <!-- Right Sidebar: Metadata & Actions -->
-            <div class="w-full md:w-96 bg-[#0e0f1e]/95 border-t md:border-t-0 md:border-l border-pink-500/20 flex flex-col h-full overflow-hidden">
+            <div class="w-full md:w-96 lg:w-[420px] shrink-0 bg-[#0e0f1e]/95 border-t md:border-t-0 md:border-l border-pink-500/20 flex flex-col h-full overflow-hidden">
                 
                 <!-- Header -->
                 <div class="p-4 border-b border-pink-500/20">

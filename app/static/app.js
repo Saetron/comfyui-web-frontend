@@ -104,6 +104,46 @@ function showToast(message, type = 'info') {
     }, 4200);
 }
 
+// ==========================================
+// GUI SCALING FOR USER SCREEN RESOLUTION
+// ==========================================
+function initGuiScale() {
+    const saved = localStorage.getItem('comfyui_gui_scale') || 'auto';
+    const select = document.getElementById('gui-scale-select');
+    if (select) select.value = saved;
+    applyGuiScale(saved);
+
+    window.addEventListener('resize', () => {
+        if ((localStorage.getItem('comfyui_gui_scale') || 'auto') === 'auto') {
+            applyGuiScale('auto');
+        }
+    });
+}
+
+function setGuiScale(val) {
+    localStorage.setItem('comfyui_gui_scale', val);
+    applyGuiScale(val);
+}
+
+function applyGuiScale(val) {
+    let scale = 1.0;
+    if (val === 'auto') {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (w >= 2560 || h >= 1440) {
+            scale = 1.12;
+        } else if (w < 1380 || h < 780) {
+            scale = 0.9;
+        } else {
+            scale = 1.0;
+        }
+    } else {
+        scale = parseInt(val, 10) / 100;
+    }
+    document.documentElement.style.setProperty('--gui-scale-factor', scale);
+    document.documentElement.style.zoom = scale;
+}
+
 // Navigation & Tab Switching
 function switchTab(tabId) {
     state.activeTab = tabId;
@@ -1405,9 +1445,13 @@ function downloadCurrentPreview() {
 // ==========================================
 function cleanRelPath(p) {
     if (!p) return '';
-    let s = p.replace(/\\/g, '/');
-    if (s.startsWith('/app/output/')) s = s.substring('/app/output/'.length);
-    else if (s.startsWith('/app/output')) s = s.substring('/app/output'.length);
+    let s = p.toString().replace(/\\/g, '/');
+    const prefixes = ['/app/output/', 'app/output/', '/app/output', 'app/output', 'output/'];
+    for (const prefix of prefixes) {
+        if (s.startsWith(prefix)) {
+            s = s.substring(prefix.length);
+        }
+    }
     return s.replace(/^\/+/, '');
 }
 
@@ -1490,6 +1534,7 @@ function createGalleryCard(item, index) {
     const card = document.createElement('div');
     const clean = cleanRelPath(item.relative_path);
     card.id = `gallery-card-${sanitizeId(clean)}`;
+    card.dataset.path = clean;
     card.className = 'group relative aspect-square bg-[#0c0d1b] rounded-2xl overflow-hidden border-2 border-pink-500/25 hover:border-pink-400 hover:shadow-xl hover:shadow-pink-500/25 transition-all duration-200 cursor-pointer hover:-translate-y-1';
 
     const thumbUrl = `/api/thumbnails/${encodeURIComponent(clean)}`;
@@ -1506,7 +1551,7 @@ function createGalleryCard(item, index) {
         </div>
     `;
 
-    card.onclick = () => openImageModalByIndex(index);
+    card.onclick = () => openImageModalByPath(item.relative_path);
     return card;
 }
 
@@ -1530,18 +1575,84 @@ function onGalleryItemAdded(item) {
         const card = createGalleryCard(item, 0);
         grid.insertBefore(card, grid.firstChild);
     }
+
+    // Also update Reel Mode queue if active
+    if (state.tiktokQueue && state.tiktokQueue.length > 0) {
+        if (!state.tiktokQueue.some(i => cleanRelPath(i.relative_path) === clean)) {
+            state.tiktokQueue.unshift(item);
+            const cnt = document.getElementById('tiktok-index-counter');
+            if (cnt) cnt.innerText = `${state.tiktokIndex + 1} / ${state.tiktokQueue.length}`;
+        }
+    }
 }
 
 function onGalleryItemDeleted(relative_path) {
     const clean = cleanRelPath(relative_path);
     const badge = document.getElementById('gallery-count-badge');
     let count = parseInt(badge.innerText, 10) || 0;
-    if (count > 0) badge.innerText = count - 1;
+    if (count > 0) badge.innerText = Math.max(0, count - 1);
 
+    // 1. Remove from state.galleryImages
     state.galleryImages = state.galleryImages.filter(i => cleanRelPath(i.relative_path) !== clean);
 
-    const card = document.getElementById(`gallery-card-${sanitizeId(clean)}`);
-    if (card) card.remove();
+    // 2. Re-render gallery grid so thumbnails and click paths are always perfectly aligned
+    renderGalleryGrid();
+
+    // 3. Update Reel Mode / TikTok Queue if populated
+    if (state.tiktokQueue && state.tiktokQueue.length > 0) {
+        state.tiktokQueue = state.tiktokQueue.filter(i => cleanRelPath(i.relative_path) !== clean);
+        if (state.currentTikTokImage && cleanRelPath(state.currentTikTokImage.relative_path || state.currentTikTokImage.filename) === clean) {
+            if (state.tiktokQueue.length > 0) {
+                if (state.tiktokIndex >= state.tiktokQueue.length) {
+                    state.tiktokIndex = 0;
+                }
+                displayTikTokItem(state.tiktokIndex, 'none');
+            } else {
+                closeTikTokMode();
+            }
+        } else {
+            const cnt = document.getElementById('tiktok-index-counter');
+            if (cnt) cnt.innerText = `${state.tiktokIndex + 1} / ${state.tiktokQueue.length}`;
+        }
+    }
+
+    // 4. Update Generator Canvas Preview if it was showing the deleted image
+    if (state.currentPreviewData) {
+        const prevClean = cleanRelPath(state.currentPreviewData.relative_path || '');
+        if (prevClean === clean || prevClean.endsWith('/' + clean) || clean.endsWith('/' + prevClean)) {
+            const wrapper = document.getElementById('preview-image-wrapper');
+            const footer = document.getElementById('preview-meta-footer');
+            const placeholder = document.getElementById('preview-placeholder');
+            const previewImg = document.getElementById('preview-img');
+            if (wrapper) wrapper.classList.add('hidden');
+            if (footer) footer.classList.add('hidden');
+            if (placeholder) placeholder.classList.remove('hidden');
+            if (previewImg) previewImg.src = '';
+            state.currentPreviewData = null;
+        }
+    }
+
+    // 5. Update Detail modal if currently displaying the deleted image
+    const imgModal = document.getElementById('image-modal');
+    if (imgModal && !imgModal.classList.contains('hidden')) {
+        if (state.currentModalImage && cleanRelPath(state.currentModalImage.relative_path) === clean) {
+            if (state.galleryImages.length > 0) {
+                if (state.currentModalIndex >= state.galleryImages.length) {
+                    state.currentModalIndex = state.galleryImages.length - 1;
+                }
+                openImageModalByIndex(state.currentModalIndex);
+            } else {
+                closeImageModal();
+            }
+        } else {
+            const navInd = document.getElementById('modal-nav-indicator') || document.getElementById('modal-img-counter');
+            if (navInd) {
+                navInd.innerText = (state.galleryImages.length > 0)
+                    ? `${state.currentModalIndex + 1} / ${state.galleryImages.length}`
+                    : '0 / 0';
+            }
+        }
+    }
 
     if (state.galleryImages.length === 0) {
         const empty = document.getElementById('gallery-empty');
@@ -1555,7 +1666,10 @@ function onGalleryItemDeleted(relative_path) {
 function openImageModalByPath(relativePath) {
     const clean = cleanRelPath(relativePath);
     let idx = state.galleryImages.findIndex(i => cleanRelPath(i.relative_path) === clean);
-    if (idx === -1) idx = 0;
+    if (idx === -1) {
+        openImageModalByIndex(-1, clean);
+        return;
+    }
     openImageModalByIndex(idx, clean);
 }
 
@@ -1564,18 +1678,27 @@ async function openImageModalByIndex(index, fallbackPath = null) {
     if (!modal) return;
     modal.classList.remove('hidden');
 
-    if (state.galleryImages && state.galleryImages.length > 0) {
-        if (index < 0) index = state.galleryImages.length - 1;
+    let item = {};
+    if (state.galleryImages && state.galleryImages.length > 0 && index >= 0) {
         if (index >= state.galleryImages.length) index = 0;
         state.currentModalIndex = index;
+        item = state.galleryImages[index] || {};
+    } else if (fallbackPath) {
+        state.currentModalIndex = -1;
+        item = { relative_path: fallbackPath, filename: fallbackPath.split('/').pop() };
+    } else if (state.galleryImages && state.galleryImages.length > 0) {
+        state.currentModalIndex = 0;
+        item = state.galleryImages[0];
+    } else {
+        closeImageModal();
+        return;
     }
 
-    const item = (state.galleryImages && state.galleryImages[state.currentModalIndex]) || {};
     const relativePath = cleanRelPath(item.relative_path || fallbackPath);
 
     const navInd = document.getElementById('modal-nav-indicator') || document.getElementById('modal-img-counter');
     if (navInd) {
-        navInd.innerText = (state.galleryImages && state.galleryImages.length > 0)
+        navInd.innerText = (state.galleryImages && state.galleryImages.length > 0 && state.currentModalIndex >= 0)
             ? `${state.currentModalIndex + 1} / ${state.galleryImages.length}`
             : '1 / 1';
     }
@@ -1777,13 +1900,34 @@ function loadModalPromptIntoGenerator() {
 // ==========================================
 // REEL MODE FULLSCREEN RANDOM VIEWER & SWIPING
 // ==========================================
-function openTikTokMode() {
+async function openTikTokMode() {
+    showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loading Reel Mode... 🌸', 'info');
+
+    try {
+        // Fetch ALL available images from output directory without pagination limits
+        const res = await fetch('/api/images?limit=0&sort=newest');
+        if (res.ok) {
+            const data = await res.json();
+            const allItems = data.items || [];
+            if (allItems.length > 0) {
+                state.tiktokQueue = [...allItems].sort(() => Math.random() - 0.5);
+                state.tiktokIndex = 0;
+                const modal = document.getElementById('tiktok-modal');
+                if (modal) modal.classList.remove('hidden');
+                displayTikTokItem(0, 'none');
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn('Could not fetch all images for Reel mode, falling back to local images:', e);
+    }
+
     if (state.galleryImages.length === 0) {
         showToast('No images available in gallery', 'error');
         return;
     }
 
-    // Shuffle queue randomly
+    // Shuffle queue randomly from cached gallery images
     state.tiktokQueue = [...state.galleryImages].sort(() => Math.random() - 0.5);
     state.tiktokIndex = 0;
 
@@ -2035,32 +2179,8 @@ async function executePermanentDelete() {
         showToast(`Permanently deleted: ${filename}`, 'success');
         closeDeleteConfirmModal();
 
-        // If inside regular detail modal, advance to next image or close
-        if (!document.getElementById('image-modal').classList.contains('hidden')) {
-            if (state.galleryImages.length > 1) {
-                navigateModalImage(1);
-            } else {
-                closeImageModal();
-            }
-        }
-
-        // If inside TikTok modal, advance
-        if (!document.getElementById('tiktok-modal').classList.contains('hidden')) {
-            if (state.tiktokQueue.length > 1) {
-                state.tiktokQueue = state.tiktokQueue.filter(i => cleanRelPath(i.relative_path) !== clean);
-                nextTikTokImage();
-            } else {
-                closeTikTokMode();
-            }
-        }
-
-        // If preview was showing this image, reset
-        if (state.currentPreviewData && cleanRelPath(state.currentPreviewData.relative_path) === clean) {
-            document.getElementById('preview-image-wrapper').classList.add('hidden');
-            document.getElementById('preview-meta-footer').classList.add('hidden');
-            document.getElementById('preview-placeholder').classList.remove('hidden');
-            state.currentPreviewData = null;
-        }
+        // Immediately update state and UI across Gallery, Reel Mode, Generator preview, and Detail modal
+        onGalleryItemDeleted(clean);
 
     } catch (e) {
         showToast(`Delete failed: ${e.message}`, 'error');
@@ -2197,6 +2317,7 @@ window.addEventListener('drop', (e) => {
 
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
+    initGuiScale();
     initWebSocket();
     checkComfyStatus();
     loadModels();

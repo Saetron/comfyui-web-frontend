@@ -485,3 +485,42 @@ input[type="range"]::-webkit-slider-thumb:hover {
     box-shadow: 0 0 14px rgba(255, 94, 152, 0.4);
 }
 
+/* ========================================================
+   Responsive Screen Resolution Scaling & High-DPI Styles
+   ======================================================== */
+
+:root {
+    --gui-scale-factor: 1;
+}
+
+/* Fluid image sizing in preview and modal */
+#preview-img, #modal-img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+/* High-resolution display enhancements (1440p, 4K) */
+@media (min-width: 1920px) {
+    .glass-modal {
+        box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.95), 0 0 60px rgba(255, 94, 152, 0.35);
+    }
+}
+
+@media (min-width: 2560px) {
+    body {
+        font-size: 16.5px;
+    }
+}
+
+/* Compact laptop screens and low height viewports */
+@media (max-height: 820px) {
+    .anime-card {
+        padding: 1.25rem;
+    }
+    #image-modal .glass-modal {
+        height: 96vh;
+    }
+}
+
+

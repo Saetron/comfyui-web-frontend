@@ -429,10 +429,10 @@ async def interrupt_generation():
 async def list_gallery_images(
     query: str = Query("", description="Search query"),
     sort: str = Query("newest", description="Sort order: newest, oldest, name_asc, name_desc"),
-    limit: int = Query(60, ge=1, le=500),
+    limit: Optional[int] = Query(60, ge=0, le=100000, description="Page limit (0 returns all images)"),
     offset: int = Query(0, ge=0),
 ):
-    """Return paginated list of gallery images, newest first by default."""
+    """Return paginated list of gallery images, newest first by default. limit=0 returns all images."""
     return gallery_service.list_images(query=query, sort=sort, limit=limit, offset=offset)
 
 
