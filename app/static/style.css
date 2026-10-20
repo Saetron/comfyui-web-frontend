@@ -486,12 +486,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 /* ========================================================
-   Responsive Screen Resolution Scaling & High-DPI Styles
+   Responsive Screen Resolution & High-DPI Styles
    ======================================================== */
-
-:root {
-    --gui-scale-factor: 1;
-}
 
 /* Fluid image sizing in preview and modal */
 #preview-img, #modal-img {

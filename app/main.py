@@ -151,7 +151,10 @@ async def get_index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
         with open(index_file, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+            return HTMLResponse(
+                content=f.read(),
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+            )
     return HTMLResponse("<h3>ComfyUI Web UI loading...</h3>")
 
 
@@ -434,6 +437,14 @@ async def list_gallery_images(
 ):
     """Return paginated list of gallery images, newest first by default. limit=0 returns all images."""
     return gallery_service.list_images(query=query, sort=sort, limit=limit, offset=offset)
+
+
+@app.get("/api/images/all")
+async def list_all_gallery_images(
+    sort: str = Query("newest", description="Sort order: newest, oldest, name_asc, name_desc"),
+):
+    """Return all gallery images without limit, specifically for Reel mode or full exports."""
+    return gallery_service.list_images(query="", sort=sort, limit=0, offset=0)
 
 
 @app.get("/api/images/{file_path:path}/metadata")

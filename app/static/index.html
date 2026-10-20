@@ -26,13 +26,13 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=1.3.2">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%200%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>🌸</text></svg>">
 </head>
 <body class="min-h-screen flex flex-col font-sans antialiased selection:bg-pink-500 selection:text-white">
 
     <!-- Top Navigation Header -->
-    <header class="border-b border-pink-500/20 bg-[#0c0d1b]/85 backdrop-blur-xl sticky top-0 z-30 shadow-lg shadow-black/40">
+    <header class="border-b border-pink-500/20 bg-[#0c0d1b]/85 backdrop-blur-xl sticky top-0 z-40 shadow-lg shadow-black/40">
         <div class="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-3">
             
             <!-- Logo & Anime Title -->
@@ -49,68 +49,112 @@
                 </div>
             </div>
 
-            <!-- Active Workflow Selector + Quick Import in Header -->
-            <div class="hidden md:flex items-center space-x-2 bg-white/5 border border-pink-500/25 rounded-2xl px-3 py-1.5 shadow-inner">
-                <span class="text-xs text-pink-300 font-bold flex items-center gap-1 shrink-0">
-                    <span>📜</span>
-                    <span>Workflow:</span>
-                </span>
-                <select id="active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate max-w-[150px] lg:max-w-[210px]">
-                    <option value="default">Default SD 1.5 Workflow</option>
-                </select>
-                <!-- Quick Import Button in Header -->
-                <input type="file" id="header-workflow-input" class="hidden" accept=".json,.png,.webp" onchange="handleWorkflowFileInput(this.files)">
-                <button type="button" onclick="document.getElementById('header-workflow-input').click()" title="Import Workflow (.json or ComfyUI .png)"
-                    class="px-2 py-0.5 bg-pink-500/20 hover:bg-pink-500/40 text-pink-300 hover:text-white rounded-lg border border-pink-500/30 text-[11px] font-bold transition-all shrink-0 flex items-center gap-1">
+            <!-- Desktop Navigation Controls (visible on lg and up) -->
+            <div class="hidden lg:flex items-center space-x-3 xl:space-x-4">
+                <!-- Active Workflow Selector + Quick Import -->
+                <div class="flex items-center space-x-2 bg-white/5 border border-pink-500/25 rounded-2xl px-3 py-1.5 shadow-inner">
+                    <span class="text-xs text-pink-300 font-bold flex items-center gap-1 shrink-0">
+                        <span>📜</span>
+                        <span>Workflow:</span>
+                    </span>
+                    <select id="active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate max-w-[150px] xl:max-w-[210px]">
+                        <option value="default">Default SD 1.5 Workflow</option>
+                    </select>
+                    <!-- Quick Import Button in Header -->
+                    <input type="file" id="header-workflow-input" class="hidden" accept=".json,.png,.webp" onchange="handleWorkflowFileInput(this.files)">
+                    <button type="button" onclick="document.getElementById('header-workflow-input').click()" title="Import Workflow (.json or ComfyUI .png)"
+                        class="px-2 py-0.5 bg-pink-500/20 hover:bg-pink-500/40 text-pink-300 hover:text-white rounded-lg border border-pink-500/30 text-[11px] font-bold transition-all shrink-0 flex items-center gap-1">
+                        <span>📂</span>
+                        <span>Import</span>
+                    </button>
+                </div>
+
+                <!-- View Tabs with Cute Anime Japanese Labels -->
+                <nav class="flex items-center space-x-1 bg-black/40 p-1.5 rounded-2xl border border-white/10 shrink-0">
+                    <button id="tab-generator" onclick="switchTab('generator')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40">
+                        <span class="text-pink-300">✨</span>
+                        <span>Generator</span>
+                        <span class="text-[10px] text-pink-300/80 font-normal hidden xl:inline">魔法</span>
+                    </button>
+                    <button id="tab-gallery" onclick="switchTab('gallery')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
+                        <span>🌸</span>
+                        <span>Gallery</span>
+                        <span class="text-[10px] text-zinc-500 font-normal hidden xl:inline">画廊</span>
+                        <span id="gallery-count-badge" class="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">0</span>
+                    </button>
+                    <button id="tab-workflow" onclick="switchTab('workflow')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
+                        <span>📜</span>
+                        <span>Workflows</span>
+                        <span class="text-[10px] text-zinc-500 font-normal hidden xl:inline">設計図</span>
+                    </button>
+                </nav>
+
+                <!-- ComfyUI Status Indicator -->
+                <div class="flex items-center space-x-2 shrink-0">
+                    <div id="comfy-status-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm">
+                        <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400"></span>
+                        <span id="status-text" class="hidden sm:inline">Checking ComfyUI...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile / Narrow Screen Header Controls (< lg) -->
+            <div class="flex lg:hidden items-center space-x-2">
+                <!-- Compact Status Dot for Mobile -->
+                <div id="comfy-status-badge-mobile" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm">
+                    <span id="status-dot-mobile" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400"></span>
+                    <span id="status-text-mobile" class="truncate max-w-[120px]">Checking...</span>
+                </div>
+
+                <!-- Hamburger Menu Button -->
+                <button type="button" id="btn-hamburger" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu"
+                    class="w-10 h-10 rounded-2xl bg-white/5 hover:bg-pink-500/20 border border-pink-500/30 text-pink-200 hover:text-white flex items-center justify-center transition-all duration-150 active:scale-95 shadow-md">
+                    <svg id="hamburger-icon-open" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                    <svg id="hamburger-icon-close" class="w-5 h-5 hidden transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+        </div>
+
+        <!-- Collapsible Mobile / Responsive Menu Drawer -->
+        <div id="mobile-menu" class="hidden lg:hidden border-t border-pink-500/20 bg-[#0c0d1b]/98 backdrop-blur-2xl px-4 py-4 space-y-3.5 shadow-2xl transition-all">
+            <!-- Mobile Navigation Tabs -->
+            <div class="grid grid-cols-3 gap-2">
+                <button id="mobile-tab-generator" onclick="switchTab('generator'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-bold transition-all text-white anime-brand-pill border border-pink-500/40">
+                    <span class="text-base text-pink-300">✨</span>
+                    <span class="mt-0.5">Generator</span>
+                </button>
+                <button id="mobile-tab-gallery" onclick="switchTab('gallery'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10">
+                    <span class="text-base">🌸</span>
+                    <span class="mt-0.5 flex items-center gap-1">
+                        <span>Gallery</span>
+                        <span id="mobile-gallery-count-badge" class="text-[10px] font-bold px-1.5 rounded-full bg-pink-500/20 text-pink-300">0</span>
+                    </span>
+                </button>
+                <button id="mobile-tab-workflow" onclick="switchTab('workflow'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10">
+                    <span class="text-base">📜</span>
+                    <span class="mt-0.5">Workflows</span>
+                </button>
+            </div>
+
+            <!-- Mobile Active Workflow Selector + Import -->
+            <div class="flex items-center justify-between gap-2 bg-white/5 border border-pink-500/25 rounded-2xl p-2.5">
+                <div class="flex items-center space-x-2 flex-1 min-w-0">
+                    <span class="text-xs text-pink-300 font-bold shrink-0">📜 Workflow:</span>
+                    <select id="mobile-active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate flex-1">
+                        <option value="default">Default SD 1.5 Workflow</option>
+                    </select>
+                </div>
+                <button type="button" onclick="document.getElementById('header-workflow-input').click(); closeMobileMenu();" title="Import Workflow"
+                    class="px-3 py-1.5 bg-pink-500/20 hover:bg-pink-500/40 text-pink-300 hover:text-white rounded-xl border border-pink-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1">
                     <span>📂</span>
                     <span>Import</span>
                 </button>
             </div>
-
-            <!-- View Tabs with Cute Anime Japanese Labels -->
-            <nav class="flex items-center space-x-1 bg-black/40 p-1.5 rounded-2xl border border-white/10 shrink-0">
-                <button id="tab-generator" onclick="switchTab('generator')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40">
-                    <span class="text-pink-300">✨</span>
-                    <span class="hidden sm:inline">Generator</span>
-                    <span class="text-[10px] text-pink-300/80 font-normal hidden lg:inline">魔法</span>
-                </button>
-                <button id="tab-gallery" onclick="switchTab('gallery')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
-                    <span>🌸</span>
-                    <span class="hidden sm:inline">Gallery</span>
-                    <span class="text-[10px] text-zinc-500 font-normal hidden lg:inline">画廊</span>
-                    <span id="gallery-count-badge" class="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">0</span>
-                </button>
-                <button id="tab-workflow" onclick="switchTab('workflow')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
-                    <span>📜</span>
-                    <span class="hidden sm:inline">Workflows</span>
-                    <span class="text-[10px] text-zinc-500 font-normal hidden lg:inline">設計図</span>
-                </button>
-            </nav>
-
-            <!-- GUI Resolution / Scale Selector -->
-            <div class="hidden sm:flex items-center space-x-1.5 bg-white/5 border border-pink-500/25 rounded-2xl px-2.5 py-1.5 shadow-inner text-xs">
-                <span class="text-pink-300 font-bold flex items-center gap-1 shrink-0" title="GUI Scaling for user screen resolution">
-                    <span>🖥️</span>
-                    <span class="hidden xl:inline text-[11px]">Scale:</span>
-                </span>
-                <select id="gui-scale-select" onchange="setGuiScale(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer">
-                    <option value="auto">Auto (Fit Screen)</option>
-                    <option value="80">80% (Compact)</option>
-                    <option value="90">90%</option>
-                    <option value="100">100%</option>
-                    <option value="110">110%</option>
-                    <option value="125">125% (4K / Large)</option>
-                </select>
-            </div>
-
-            <!-- ComfyUI Status Indicator -->
-            <div class="flex items-center space-x-2 shrink-0">
-                <div id="comfy-status-badge" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm">
-                    <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400"></span>
-                    <span id="status-text" class="hidden sm:inline">Checking ComfyUI...</span>
-                </div>
-            </div>
-
         </div>
     </header>
 
@@ -881,6 +925,6 @@
     <div id="toast-container" class="fixed bottom-4 right-4 z-[3000] space-y-2 pointer-events-none"></div>
 
     <!-- Main JavaScript Logic -->
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=1.3.2"></script>
 </body>
 </html>

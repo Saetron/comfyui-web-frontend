@@ -105,43 +105,33 @@ function showToast(message, type = 'info') {
 }
 
 // ==========================================
-// GUI SCALING FOR USER SCREEN RESOLUTION
+// RESPONSIVE MOBILE NAVIGATION MENU
 // ==========================================
-function initGuiScale() {
-    const saved = localStorage.getItem('comfyui_gui_scale') || 'auto';
-    const select = document.getElementById('gui-scale-select');
-    if (select) select.value = saved;
-    applyGuiScale(saved);
+function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    const openIcon = document.getElementById('hamburger-icon-open');
+    const closeIcon = document.getElementById('hamburger-icon-close');
+    if (!menu) return;
 
-    window.addEventListener('resize', () => {
-        if ((localStorage.getItem('comfyui_gui_scale') || 'auto') === 'auto') {
-            applyGuiScale('auto');
-        }
-    });
-}
-
-function setGuiScale(val) {
-    localStorage.setItem('comfyui_gui_scale', val);
-    applyGuiScale(val);
-}
-
-function applyGuiScale(val) {
-    let scale = 1.0;
-    if (val === 'auto') {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        if (w >= 2560 || h >= 1440) {
-            scale = 1.12;
-        } else if (w < 1380 || h < 780) {
-            scale = 0.9;
-        } else {
-            scale = 1.0;
-        }
+    const isHidden = menu.classList.contains('hidden');
+    if (isHidden) {
+        menu.classList.remove('hidden');
+        if (openIcon) openIcon.classList.add('hidden');
+        if (closeIcon) closeIcon.classList.remove('hidden');
     } else {
-        scale = parseInt(val, 10) / 100;
+        menu.classList.add('hidden');
+        if (openIcon) openIcon.classList.remove('hidden');
+        if (closeIcon) closeIcon.classList.add('hidden');
     }
-    document.documentElement.style.setProperty('--gui-scale-factor', scale);
-    document.documentElement.style.zoom = scale;
+}
+
+function closeMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    const openIcon = document.getElementById('hamburger-icon-open');
+    const closeIcon = document.getElementById('hamburger-icon-close');
+    if (menu) menu.classList.add('hidden');
+    if (openIcon) openIcon.classList.remove('hidden');
+    if (closeIcon) closeIcon.classList.add('hidden');
 }
 
 // Navigation & Tab Switching
@@ -150,12 +140,16 @@ function switchTab(tabId) {
     ['generator', 'gallery', 'workflow'].forEach(tab => {
         const view = document.getElementById(`view-${tab}`);
         const btn = document.getElementById(`tab-${tab}`);
+        const mobileBtn = document.getElementById(`mobile-tab-${tab}`);
+
         if (tab === tabId) {
-            view.classList.remove('hidden');
-            btn.className = 'flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40';
+            if (view) view.classList.remove('hidden');
+            if (btn) btn.className = 'flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40';
+            if (mobileBtn) mobileBtn.className = 'flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-bold transition-all text-white anime-brand-pill border border-pink-500/40';
         } else {
-            view.classList.add('hidden');
-            btn.className = 'flex items-center space-x-2 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5';
+            if (view) view.classList.add('hidden');
+            if (btn) btn.className = 'flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5';
+            if (mobileBtn) mobileBtn.className = 'flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10';
         }
     });
 
@@ -371,8 +365,10 @@ async function loadActiveWorkflowTemplate() {
             state.activeWorkflowId = data.active_id;
             const s1 = document.getElementById('active-workflow-select');
             const s2 = document.getElementById('editor-workflow-select');
+            const s3 = document.getElementById('mobile-active-workflow-select');
             if (s1) s1.value = data.active_id;
             if (s2) s2.value = data.active_id;
+            if (s3) s3.value = data.active_id;
         }
     } catch (e) {
         console.warn('Failed to load active workflow template on startup:', e);
@@ -388,8 +384,9 @@ async function loadAvailableWorkflows() {
 
         const headerSelect = document.getElementById('active-workflow-select');
         const editorSelect = document.getElementById('editor-workflow-select');
+        const mobileSelect = document.getElementById('mobile-active-workflow-select');
         
-        [headerSelect, editorSelect].forEach(select => {
+        [headerSelect, editorSelect, mobileSelect].forEach(select => {
             if (!select) return;
             select.innerHTML = '';
             
@@ -447,8 +444,10 @@ async function switchActiveWorkflow(workflowId) {
         // Sync dropdowns
         const s1 = document.getElementById('active-workflow-select');
         const s2 = document.getElementById('editor-workflow-select');
+        const s3 = document.getElementById('mobile-active-workflow-select');
         if (s1) s1.value = workflowId;
         if (s2) s2.value = workflowId;
+        if (s3) s3.value = workflowId;
 
         // Update editor if in workflow view
         const editor = document.getElementById('workflow-editor');
@@ -501,6 +500,14 @@ async function saveWorkflowToServerOrLocal(destination = 'local') {
     }
 }
 
+// Helper to update gallery counter badges across desktop and mobile
+function updateGalleryBadges(count) {
+    const b1 = document.getElementById('gallery-count-badge');
+    const b2 = document.getElementById('mobile-gallery-count-badge');
+    if (b1) b1.innerText = count;
+    if (b2) b2.innerText = count;
+}
+
 // ==========================================
 // CONFIGURATION & STATUS
 // ==========================================
@@ -509,8 +516,11 @@ async function checkComfyStatus() {
         const res = await fetch('/api/status');
         const data = await res.json();
         const badge = document.getElementById('comfy-status-badge');
+        const badgeMobile = document.getElementById('comfy-status-badge-mobile');
         const dot = document.getElementById('status-dot');
+        const dotMobile = document.getElementById('status-dot-mobile');
         const text = document.getElementById('status-text');
+        const textMobile = document.getElementById('status-text-mobile');
 
         if (data.default_negative_prompt) {
             state.defaultNegativePrompt = data.default_negative_prompt;
@@ -521,21 +531,33 @@ async function checkComfyStatus() {
         }
 
         if (data.comfyui && data.comfyui.connected) {
-            dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
-            text.innerText = 'ComfyUI Online';
-            badge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-950/60 border border-emerald-800/80 text-emerald-300';
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400';
+            if (dotMobile) dotMobile.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400';
+            if (text) text.innerText = 'ComfyUI Online';
+            if (textMobile) textMobile.innerText = 'Online';
+            if (badge) badge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-950/60 border border-emerald-800/80 text-emerald-300';
+            if (badgeMobile) badgeMobile.className = 'flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/60 border border-emerald-800/80 text-emerald-300';
         } else {
-            dot.className = 'w-2 h-2 rounded-full bg-rose-500';
-            text.innerText = 'ComfyUI Offline';
-            badge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium bg-rose-950/60 border border-rose-800/80 text-rose-300';
+            if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500';
+            if (dotMobile) dotMobile.className = 'w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500';
+            if (text) text.innerText = 'ComfyUI Offline';
+            if (textMobile) textMobile.innerText = 'Offline';
+            if (badge) badge.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-950/60 border border-rose-800/80 text-rose-300';
+            if (badgeMobile) badgeMobile.className = 'flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-950/60 border border-rose-800/80 text-rose-300';
         }
 
         if (data.total_images !== undefined) {
-            document.getElementById('gallery-count-badge').innerText = data.total_images;
+            updateGalleryBadges(data.total_images);
         }
     } catch (e) {
-        document.getElementById('status-dot').className = 'w-2 h-2 rounded-full bg-rose-500';
-        document.getElementById('status-text').innerText = 'Backend Offline';
+        const dot = document.getElementById('status-dot');
+        const dotMobile = document.getElementById('status-dot-mobile');
+        const text = document.getElementById('status-text');
+        const textMobile = document.getElementById('status-text-mobile');
+        if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+        if (dotMobile) dotMobile.className = 'w-2 h-2 rounded-full bg-rose-500';
+        if (text) text.innerText = 'Backend Offline';
+        if (textMobile) textMobile.innerText = 'Offline';
     }
 }
 
@@ -1481,7 +1503,7 @@ async function loadGallery(reset = false) {
         const data = await res.json();
 
         state.galleryTotal = data.total;
-        document.getElementById('gallery-count-badge').innerText = data.total;
+        updateGalleryBadges(data.total);
         statsText.innerText = `${data.total} image${data.total === 1 ? '' : 's'} in output volume`;
 
         if (reset) {
@@ -1561,8 +1583,8 @@ function sanitizeId(path) {
 
 function onGalleryItemAdded(item) {
     const badge = document.getElementById('gallery-count-badge');
-    let count = parseInt(badge.innerText, 10) || 0;
-    badge.innerText = count + 1;
+    let count = parseInt(badge ? badge.innerText : '0', 10) || 0;
+    updateGalleryBadges(count + 1);
 
     const clean = cleanRelPath(item.relative_path);
     const existingIndex = state.galleryImages.findIndex(i => cleanRelPath(i.relative_path) === clean);
@@ -1589,8 +1611,8 @@ function onGalleryItemAdded(item) {
 function onGalleryItemDeleted(relative_path) {
     const clean = cleanRelPath(relative_path);
     const badge = document.getElementById('gallery-count-badge');
-    let count = parseInt(badge.innerText, 10) || 0;
-    if (count > 0) badge.innerText = Math.max(0, count - 1);
+    let count = parseInt(badge ? badge.innerText : '0', 10) || 0;
+    if (count > 0) updateGalleryBadges(Math.max(0, count - 1));
 
     // 1. Remove from state.galleryImages
     state.galleryImages = state.galleryImages.filter(i => cleanRelPath(i.relative_path) !== clean);
@@ -1903,23 +1925,38 @@ function loadModalPromptIntoGenerator() {
 async function openTikTokMode() {
     showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loading Reel Mode... 🌸', 'info');
 
+    let allItems = [];
     try {
         // Fetch ALL available images from output directory without pagination limits
-        const res = await fetch('/api/images?limit=0&sort=newest');
+        const res = await fetch(`/api/images/all?t=${Date.now()}`);
         if (res.ok) {
             const data = await res.json();
-            const allItems = data.items || [];
-            if (allItems.length > 0) {
-                state.tiktokQueue = [...allItems].sort(() => Math.random() - 0.5);
-                state.tiktokIndex = 0;
-                const modal = document.getElementById('tiktok-modal');
-                if (modal) modal.classList.remove('hidden');
-                displayTikTokItem(0, 'none');
-                return;
-            }
+            allItems = data.items || [];
         }
     } catch (e) {
-        console.warn('Could not fetch all images for Reel mode, falling back to local images:', e);
+        console.warn('Could not fetch /api/images/all for Reel mode:', e);
+    }
+
+    if (!allItems || allItems.length === 0) {
+        try {
+            const resFallback = await fetch(`/api/images?limit=0&sort=newest&t=${Date.now()}`);
+            if (resFallback.ok) {
+                const dataFallback = await resFallback.json();
+                allItems = dataFallback.items || [];
+            }
+        } catch (e2) {
+            console.warn('Fallback to /api/images?limit=0 failed:', e2);
+        }
+    }
+
+    if (allItems && allItems.length > 0) {
+        state.tiktokQueue = [...allItems].sort(() => Math.random() - 0.5);
+        state.tiktokIndex = 0;
+        const modal = document.getElementById('tiktok-modal');
+        if (modal) modal.classList.remove('hidden');
+        displayTikTokItem(0, 'none');
+        showToast(`🎬 Reel Mode loaded ${allItems.length} images!`, 'success');
+        return;
     }
 
     if (state.galleryImages.length === 0) {
@@ -2317,7 +2354,11 @@ window.addEventListener('drop', (e) => {
 
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
-    initGuiScale();
+    // Reset any legacy scale / zoom settings
+    localStorage.removeItem('comfyui_gui_scale');
+    document.documentElement.style.zoom = '';
+    document.documentElement.style.removeProperty('--gui-scale-factor');
+
     initWebSocket();
     checkComfyStatus();
     loadModels();
