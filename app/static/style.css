@@ -530,4 +530,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
     }
 }
 
+/* Deferred offscreen rendering for large gallery grids */
+.gallery-card-item {
+    content-visibility: auto;
+    contain-intrinsic-size: auto none auto 220px;
+}
+
 

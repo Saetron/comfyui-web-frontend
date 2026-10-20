@@ -4,6 +4,7 @@
 const state = {
     clientId: getOrCreateClientId(),
     ws: null,
+    wsPingInterval: null,
     activeTab: 'generator',
     isGenerating: false,
     generationStartTime: null,
@@ -75,6 +76,16 @@ function getOrCreateClientId() {
     return id;
 }
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -94,7 +105,7 @@ function showToast(message, type = 'info') {
     }
 
     toast.className = `pointer-events-auto flex items-center space-x-2.5 px-4 py-3 rounded-2xl border ${borderGrad} text-xs font-semibold shadow-2xl backdrop-blur-xl bg-[#0e0f1e]/95 toast-anime ${textGrad}`;
-    toast.innerHTML = `<span class="text-sm shrink-0">${icon}</span><span class="leading-snug">${message}</span>`;
+    toast.innerHTML = `<span class="text-sm shrink-0">${icon}</span><span class="leading-snug">${escapeHtml(message)}</span>`;
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -255,6 +266,35 @@ function handleWorkflowDrop(e) {
 // ==========================================
 // WORKFLOW PARAMETER SYNC & MANAGEMENT
 // ==========================================
+function selectOrAddOption(selectId, value, customLabelFn = null, caseInsensitive = false) {
+    const select = document.getElementById(selectId);
+    if (!select || !value) return false;
+    const targetVal = String(value);
+    const targetLower = targetVal.toLowerCase();
+
+    for (let i = 0; i < select.options.length; i++) {
+        const optVal = select.options[i].value;
+        if (caseInsensitive ? optVal.toLowerCase() === targetLower : optVal === targetVal) {
+            select.selectedIndex = i;
+            return true;
+        }
+    }
+
+    const opt = document.createElement('option');
+    opt.value = targetVal;
+    opt.textContent = customLabelFn ? customLabelFn(targetVal) : targetVal;
+    opt.selected = true;
+    select.appendChild(opt);
+    return true;
+}
+
+function syncWorkflowSelects(workflowId) {
+    ['active-workflow-select', 'editor-workflow-select', 'mobile-active-workflow-select'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = workflowId;
+    });
+}
+
 function applyWorkflowParamsToForm(params, sourceName = '') {
     if (!params || typeof params !== 'object') return;
     state.activeWorkflowParams = params;
@@ -262,26 +302,8 @@ function applyWorkflowParamsToForm(params, sourceName = '') {
     const updated = [];
 
     // 1. Checkpoint Model
-    if (params.model) {
-        const ckptSelect = document.getElementById('ckpt-select');
-        if (ckptSelect) {
-            let found = false;
-            for (let i = 0; i < ckptSelect.options.length; i++) {
-                if (ckptSelect.options[i].value === params.model) {
-                    ckptSelect.selectedIndex = i;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                const opt = document.createElement('option');
-                opt.value = params.model;
-                opt.textContent = `⭐ ${params.model} (From Workflow)`;
-                opt.selected = true;
-                ckptSelect.appendChild(opt);
-            }
-            updated.push(`Model: ${params.model}`);
-        }
+    if (params.model && selectOrAddOption('ckpt-select', params.model, m => `⭐ ${m} (From Workflow)`)) {
+        updated.push(`Model: ${params.model}`);
     }
 
     // 2. Steps
@@ -318,49 +340,13 @@ function applyWorkflowParamsToForm(params, sourceName = '') {
     }
 
     // 5. Sampler
-    if (params.sampler_name) {
-        const samplerSelect = document.getElementById('sampler-select');
-        if (samplerSelect) {
-            let found = false;
-            for (let i = 0; i < samplerSelect.options.length; i++) {
-                if (samplerSelect.options[i].value.toLowerCase() === params.sampler_name.toLowerCase()) {
-                    samplerSelect.selectedIndex = i;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                const opt = document.createElement('option');
-                opt.value = params.sampler_name;
-                opt.textContent = params.sampler_name;
-                opt.selected = true;
-                samplerSelect.appendChild(opt);
-            }
-            updated.push(`Sampler: ${params.sampler_name}`);
-        }
+    if (params.sampler_name && selectOrAddOption('sampler-select', params.sampler_name, null, true)) {
+        updated.push(`Sampler: ${params.sampler_name}`);
     }
 
     // 6. Scheduler
-    if (params.scheduler) {
-        const schedSelect = document.getElementById('scheduler-select');
-        if (schedSelect) {
-            let found = false;
-            for (let i = 0; i < schedSelect.options.length; i++) {
-                if (schedSelect.options[i].value.toLowerCase() === params.scheduler.toLowerCase()) {
-                    schedSelect.selectedIndex = i;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                const opt = document.createElement('option');
-                opt.value = params.scheduler;
-                opt.textContent = params.scheduler;
-                opt.selected = true;
-                schedSelect.appendChild(opt);
-            }
-            updated.push(`Scheduler: ${params.scheduler}`);
-        }
+    if (params.scheduler && selectOrAddOption('scheduler-select', params.scheduler, null, true)) {
+        updated.push(`Scheduler: ${params.scheduler}`);
     }
 
     // 7. Seed
@@ -394,12 +380,7 @@ async function loadActiveWorkflowTemplate() {
         }
         if (data.active_id) {
             state.activeWorkflowId = data.active_id;
-            const s1 = document.getElementById('active-workflow-select');
-            const s2 = document.getElementById('editor-workflow-select');
-            const s3 = document.getElementById('mobile-active-workflow-select');
-            if (s1) s1.value = data.active_id;
-            if (s2) s2.value = data.active_id;
-            if (s3) s3.value = data.active_id;
+            syncWorkflowSelects(data.active_id);
         }
     } catch (e) {
         console.warn('Failed to load active workflow template on startup:', e);
@@ -473,13 +454,7 @@ async function switchActiveWorkflow(workflowId) {
         const data = await res.json();
         state.activeWorkflowId = workflowId;
 
-        // Sync dropdowns
-        const s1 = document.getElementById('active-workflow-select');
-        const s2 = document.getElementById('editor-workflow-select');
-        const s3 = document.getElementById('mobile-active-workflow-select');
-        if (s1) s1.value = workflowId;
-        if (s2) s2.value = workflowId;
-        if (s3) s3.value = workflowId;
+        syncWorkflowSelects(workflowId);
         updateHeaderResponsiveness();
 
         // Update editor if in workflow view
@@ -607,31 +582,18 @@ async function loadModels() {
         const select = document.getElementById('ckpt-select');
         select.innerHTML = '<option value="">(Default from Workflow)</option>';
         if (data.models && data.models.length > 0) {
+            const frag = document.createDocumentFragment();
             data.models.forEach(m => {
                 const opt = document.createElement('option');
                 opt.value = m;
                 opt.textContent = m;
-                select.appendChild(opt);
+                frag.appendChild(opt);
             });
+            select.appendChild(frag);
         }
         // If an active workflow specified a model, ensure it's selected
         if (state.activeWorkflowParams && state.activeWorkflowParams.model) {
-            const targetModel = state.activeWorkflowParams.model;
-            let found = false;
-            for (let i = 0; i < select.options.length; i++) {
-                if (select.options[i].value === targetModel) {
-                    select.selectedIndex = i;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                const opt = document.createElement('option');
-                opt.value = targetModel;
-                opt.textContent = `⭐ ${targetModel} (From Workflow)`;
-                opt.selected = true;
-                select.appendChild(opt);
-            }
+            selectOrAddOption('ckpt-select', state.activeWorkflowParams.model, m => `⭐ ${m} (From Workflow)`);
         }
     } catch (e) {
         console.warn('Could not load models list:', e);
@@ -773,30 +735,33 @@ function renderAutocompleteDropdown(items, textarea) {
     dd.style.left = `${rect.left + window.scrollX}px`;
     dd.style.width = `${Math.min(rect.width, 420)}px`;
 
+    const fragment = document.createDocumentFragment();
     items.forEach((item, idx) => {
         const row = document.createElement('div');
         row.className = `tag-autocomplete-item ${idx === 0 ? 'active' : ''}`;
         
-        const catClass = `tag-cat-${item.category_name || 'general'}`;
+        const catClass = `tag-cat-${escapeHtml(item.category_name || 'general')}`;
+        const firstAlias = item.aliases ? item.aliases.split(',')[0] : '';
         
         row.innerHTML = `
             <div class="flex items-center space-x-2 truncate">
                 <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${catClass}">
-                    ${item.category_name || 'general'}
+                    ${escapeHtml(item.category_name || 'general')}
                 </span>
-                <span class="font-medium text-zinc-100 truncate">${item.name}</span>
-                ${item.aliases ? `<span class="text-[10px] text-zinc-500 italic truncate">(${item.aliases.split(',')[0]})</span>` : ''}
+                <span class="font-medium text-zinc-100 truncate">${escapeHtml(item.name)}</span>
+                ${firstAlias ? `<span class="text-[10px] text-zinc-500 italic truncate">(${escapeHtml(firstAlias)})</span>` : ''}
             </div>
-            <span class="text-[11px] font-mono text-zinc-400 shrink-0 ml-2">${item.count_formatted || item.count}</span>
+            <span class="text-[11px] font-mono text-zinc-400 shrink-0 ml-2">${escapeHtml(item.count_formatted || item.count)}</span>
         `;
 
         row.onmousedown = (e) => {
             e.preventDefault();
             selectAutocompleteItem(item);
         };
-        dd.appendChild(row);
+        fragment.appendChild(row);
     });
 
+    dd.appendChild(fragment);
     dd.classList.remove('hidden');
 }
 
@@ -1119,6 +1084,11 @@ function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/${state.clientId}`;
 
+    if (state.wsPingInterval) {
+        clearInterval(state.wsPingInterval);
+        state.wsPingInterval = null;
+    }
+
     state.ws = new WebSocket(wsUrl);
 
     state.ws.onopen = () => {
@@ -1135,6 +1105,10 @@ function initWebSocket() {
     };
 
     state.ws.onclose = () => {
+        if (state.wsPingInterval) {
+            clearInterval(state.wsPingInterval);
+            state.wsPingInterval = null;
+        }
         console.warn('WebSocket closed, attempting reconnect in 2s...');
         setTimeout(initWebSocket, 2000);
     };
@@ -1143,7 +1117,7 @@ function initWebSocket() {
         console.error('WebSocket error:', err);
     };
 
-    setInterval(() => {
+    state.wsPingInterval = setInterval(() => {
         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
             state.ws.send(JSON.stringify({ type: 'ping' }));
         }
@@ -1534,9 +1508,10 @@ function startGenerationTimer() {
     if (timerElem) timerElem.innerText = '0.0s';
     if (state.generationTimerInterval) clearInterval(state.generationTimerInterval);
     state.generationTimerInterval = setInterval(() => {
-        const elapsed = ((Date.now() - state.generationStartTime) / 1000).toFixed(1);
-        const t = document.getElementById('preview-timer') || document.getElementById('gen-timer');
-        if (t) t.innerText = `${elapsed}s`;
+        if (timerElem) {
+            const elapsed = ((Date.now() - state.generationStartTime) / 1000).toFixed(1);
+            timerElem.innerText = `${elapsed}s`;
+        }
     }, 100);
 }
 
@@ -1657,11 +1632,12 @@ async function loadGallery(reset = false) {
 
         if (reset) {
             state.galleryImages = data.items;
+            renderGalleryGrid();
         } else {
+            const startIdx = state.galleryImages.length;
             state.galleryImages = state.galleryImages.concat(data.items);
+            appendGalleryItems(data.items, startIdx);
         }
-
-        renderGalleryGrid();
 
         const loadMoreContainer = document.getElementById('gallery-load-more-container');
         if (state.galleryImages.length < data.total) {
@@ -1691,14 +1667,23 @@ function loadMoreGallery() {
     loadGallery(false);
 }
 
+function appendGalleryItems(items, startIndex = 0) {
+    const grid = document.getElementById('gallery-grid');
+    if (!grid || !items || items.length === 0) return;
+
+    const fragment = document.createDocumentFragment();
+    items.forEach((item, idx) => {
+        const card = createGalleryCard(item, startIndex + idx);
+        fragment.appendChild(card);
+    });
+    grid.appendChild(fragment);
+}
+
 function renderGalleryGrid() {
     const grid = document.getElementById('gallery-grid');
+    if (!grid) return;
     grid.innerHTML = '';
-
-    state.galleryImages.forEach((item, index) => {
-        const card = createGalleryCard(item, index);
-        grid.appendChild(card);
-    });
+    appendGalleryItems(state.galleryImages, 0);
 }
 
 function createGalleryCard(item, index) {
@@ -1706,17 +1691,19 @@ function createGalleryCard(item, index) {
     const clean = cleanRelPath(item.relative_path);
     card.id = `gallery-card-${sanitizeId(clean)}`;
     card.dataset.path = clean;
-    card.className = 'group relative aspect-square bg-[#0c0d1b] rounded-2xl overflow-hidden border-2 border-pink-500/25 hover:border-pink-400 hover:shadow-xl hover:shadow-pink-500/25 transition-all duration-200 cursor-pointer hover:-translate-y-1';
+    card.className = 'gallery-card-item group relative aspect-square bg-[#0c0d1b] rounded-2xl overflow-hidden border-2 border-pink-500/25 hover:border-pink-400 hover:shadow-xl hover:shadow-pink-500/25 transition-all duration-200 cursor-pointer hover:-translate-y-1';
 
     const thumbUrl = `/api/thumbnails/${encodeURIComponent(clean)}`;
+    const safeFilename = escapeHtml(item.filename || '');
+    const safeSize = escapeHtml(item.file_size_human || '');
 
     card.innerHTML = `
-        <img src="${thumbUrl}" alt="${item.filename}" loading="lazy" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+        <img src="${thumbUrl}" alt="${safeFilename}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
         
         <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-3 flex flex-col justify-end">
-            <span class="text-xs font-bold text-pink-100 truncate drop-shadow">${item.filename}</span>
+            <span class="text-xs font-bold text-pink-100 truncate drop-shadow">${safeFilename}</span>
             <div class="flex items-center justify-between text-[10px] text-pink-300 mt-1">
-                <span class="font-mono">${item.file_size_human}</span>
+                <span class="font-mono">${safeSize}</span>
                 <span class="px-2 py-0.5 rounded-full bg-pink-500/30 text-white font-bold border border-pink-500/40">🌸 View</span>
             </div>
         </div>
@@ -1766,8 +1753,13 @@ function onGalleryItemDeleted(relative_path) {
     // 1. Remove from state.galleryImages
     state.galleryImages = state.galleryImages.filter(i => cleanRelPath(i.relative_path) !== clean);
 
-    // 2. Re-render gallery grid so thumbnails and click paths are always perfectly aligned
-    renderGalleryGrid();
+    // 2. Remove card directly from DOM instead of rebuilding all gallery cards
+    const cardEl = document.getElementById(`gallery-card-${sanitizeId(clean)}`);
+    if (cardEl) {
+        cardEl.remove();
+    } else {
+        renderGalleryGrid();
+    }
 
     // 3. Update Reel Mode / TikTok Queue if populated
     if (state.tiktokQueue && state.tiktokQueue.length > 0) {
@@ -2037,10 +2029,7 @@ function copyModalRawJson() {
     }
 }
 
-function loadModalPromptIntoGenerator() {
-    if (!state.currentModalImage) return;
-    const p = state.currentModalImage.parsed || {};
-
+function populateGeneratorFromMetadata(p = {}) {
     if (p.positive_prompt) {
         document.getElementById('positive-prompt').value = state.autoNewlines ? formatPromptNewlines(p.positive_prompt) : p.positive_prompt;
     }
@@ -2065,7 +2054,11 @@ function loadModalPromptIntoGenerator() {
     }
     if (p.sampler_name) document.getElementById('sampler-select').value = p.sampler_name;
     if (p.scheduler) document.getElementById('scheduler-select').value = p.scheduler;
+}
 
+function loadModalPromptIntoGenerator() {
+    if (!state.currentModalImage) return;
+    populateGeneratorFromMetadata(state.currentModalImage.parsed || {});
     closeImageModal();
     switchTab('generator');
     showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loaded into Generator! ✨', 'success');
@@ -2300,14 +2293,7 @@ const copyReelPrompt = copyTikTokPrompt;
 
 function loadTikTokPromptIntoGenerator() {
     if (!state.currentTikTokImage) return;
-    const p = state.currentTikTokImage.parsed || {};
-    if (p.positive_prompt) document.getElementById('positive-prompt').value = p.positive_prompt;
-    if (p.negative_prompt) document.getElementById('negative-prompt').value = p.negative_prompt;
-    if (p.seed) {
-        document.getElementById('seed-input').value = p.seed;
-        document.getElementById('seed-randomize').checked = false;
-        toggleSeedInput();
-    }
+    populateGeneratorFromMetadata(state.currentTikTokImage.parsed || {});
     closeTikTokMode();
     switchTab('generator');
     showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loaded into Generator! ✨', 'success');
