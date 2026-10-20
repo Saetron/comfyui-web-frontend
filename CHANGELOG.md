@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### ⚙️ CI / Maintenance
+- Added Dependabot configuration (`.github/dependabot.yml`) for automated weekly vulnerability and dependency updates covering `pip`, `docker`, and `github-actions`.
+
+---
+
 ## [1.1.0] - 2026-10-20
 
 ### 🌸 Added
