@@ -108,6 +108,36 @@ function showToast(message, type = 'info') {
 // ==========================================
 // RESPONSIVE MOBILE NAVIGATION MENU
 // ==========================================
+function updateHeaderResponsiveness() {
+    const headerRow = document.getElementById('header-inner-row');
+    const desktopNav = document.getElementById('desktop-header-controls');
+    const mobileNav = document.getElementById('mobile-header-controls');
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (!desktopNav || !mobileNav) return;
+
+    // Use window.innerWidth (the actual browser window resolution, NOT display resolution)
+    const winWidth = window.innerWidth;
+
+    // Below 1360px window width, collapse to hamburger menu
+    if (winWidth < 1360) {
+        desktopNav.style.setProperty('display', 'none', 'important');
+        mobileNav.style.setProperty('display', 'flex', 'important');
+    } else {
+        desktopNav.style.removeProperty('display');
+        mobileNav.style.removeProperty('display');
+
+        // Dynamic runover check: if elements exceed the header container width
+        if (headerRow && headerRow.scrollWidth > headerRow.clientWidth) {
+            desktopNav.style.setProperty('display', 'none', 'important');
+            mobileNav.style.setProperty('display', 'flex', 'important');
+        } else {
+            if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                closeMobileMenu();
+            }
+        }
+    }
+}
+
 function toggleMobileMenu() {
     const menu = document.getElementById('mobile-menu');
     const openIcon = document.getElementById('hamburger-icon-open');
@@ -425,6 +455,7 @@ async function loadAvailableWorkflows() {
 
         // Also sync the active workflow template and its tuning parameters to the Generator
         await loadActiveWorkflowTemplate();
+        updateHeaderResponsiveness();
 
     } catch (e) {
         console.warn('Failed to load available workflows:', e);
@@ -449,6 +480,7 @@ async function switchActiveWorkflow(workflowId) {
         if (s1) s1.value = workflowId;
         if (s2) s2.value = workflowId;
         if (s3) s3.value = workflowId;
+        updateHeaderResponsiveness();
 
         // Update editor if in workflow view
         const editor = document.getElementById('workflow-editor');
@@ -1307,7 +1339,6 @@ function setResolution(w, h) {
         state.activeWorkflowParams.height = h;
     }
     highlightActiveResPreset();
-    showToast(`📐 Resolution set to ${w}×${h}`, 'info');
 }
 
 function highlightActiveResPreset() {
@@ -2492,6 +2523,13 @@ window.addEventListener('DOMContentLoaded', () => {
     updateBatchCountUI();
     highlightActiveResPreset();
     updateAutoNewlinesUI();
+    updateHeaderResponsiveness();
+
+    window.addEventListener('resize', updateHeaderResponsiveness);
+    const headerRow = document.getElementById('header-inner-row');
+    if (headerRow && window.ResizeObserver) {
+        new ResizeObserver(() => updateHeaderResponsiveness()).observe(headerRow);
+    }
 
     setInterval(checkComfyStatus, 10000);
 });

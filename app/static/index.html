@@ -26,14 +26,14 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/style.css?v=1.3.3">
+    <link rel="stylesheet" href="/static/style.css?v=1.3.4">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%200%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>🌸</text></svg>">
 </head>
 <body class="min-h-screen flex flex-col font-sans antialiased selection:bg-pink-500 selection:text-white">
 
     <!-- Top Navigation Header -->
     <header class="border-b border-pink-500/20 bg-[#0c0d1b]/85 backdrop-blur-xl sticky top-0 z-40 shadow-lg shadow-black/40">
-        <div class="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-3">
+        <div id="header-inner-row" class="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-3">
             
             <!-- Logo & Anime Title -->
             <div class="flex items-center space-x-3 shrink-0">
@@ -49,15 +49,15 @@
                 </div>
             </div>
 
-            <!-- Desktop Navigation Controls (visible on lg and up) -->
-            <div class="hidden lg:flex items-center space-x-3 xl:space-x-4">
+            <!-- Desktop Navigation Controls (visible when window fits without runover) -->
+            <div id="desktop-header-controls" class="desktop-header-nav items-center space-x-2.5 xl:space-x-3 2xl:space-x-4">
                 <!-- Active Workflow Selector + Quick Import -->
                 <div class="flex items-center space-x-2 bg-white/5 border border-pink-500/25 rounded-2xl px-3 py-1.5 shadow-inner">
                     <span class="text-xs text-pink-300 font-bold flex items-center gap-1 shrink-0">
                         <span>📜</span>
                         <span>Workflow:</span>
                     </span>
-                    <select id="active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate max-w-[150px] xl:max-w-[210px]">
+                    <select id="active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate max-w-[130px] xl:max-w-[180px]">
                         <option value="default">Default SD 1.5 Workflow</option>
                     </select>
                     <!-- Quick Import Button in Header -->
@@ -71,21 +71,21 @@
 
                 <!-- View Tabs with Cute Anime Japanese Labels -->
                 <nav class="flex items-center space-x-1 bg-black/40 p-1.5 rounded-2xl border border-white/10 shrink-0">
-                    <button id="tab-generator" onclick="switchTab('generator')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40">
+                    <button id="tab-generator" onclick="switchTab('generator')" class="flex items-center space-x-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-sm font-bold transition-all text-white anime-brand-pill shadow-md border border-pink-500/40">
                         <span class="text-pink-300">✨</span>
                         <span>Generator</span>
-                        <span class="text-[10px] text-pink-300/80 font-normal hidden xl:inline">魔法</span>
+                        <span class="text-[10px] text-pink-300/80 font-normal hidden 2xl:inline">魔法</span>
                     </button>
-                    <button id="tab-gallery" onclick="switchTab('gallery')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
+                    <button id="tab-gallery" onclick="switchTab('gallery')" class="flex items-center space-x-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
                         <span>🌸</span>
                         <span>Gallery</span>
-                        <span class="text-[10px] text-zinc-500 font-normal hidden xl:inline">画廊</span>
+                        <span class="text-[10px] text-zinc-500 font-normal hidden 2xl:inline">画廊</span>
                         <span id="gallery-count-badge" class="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30">0</span>
                     </button>
-                    <button id="tab-workflow" onclick="switchTab('workflow')" class="flex items-center space-x-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
+                    <button id="tab-workflow" onclick="switchTab('workflow')" class="flex items-center space-x-1.5 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-sm font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5">
                         <span>📜</span>
                         <span>Workflows</span>
-                        <span class="text-[10px] text-zinc-500 font-normal hidden xl:inline">設計図</span>
+                        <span class="text-[10px] text-zinc-500 font-normal hidden 2xl:inline">設計図</span>
                     </button>
                 </nav>
 
@@ -98,8 +98,8 @@
                 </div>
             </div>
 
-            <!-- Mobile / Narrow Screen Header Controls (< lg) -->
-            <div class="flex lg:hidden items-center space-x-2">
+            <!-- Mobile / Narrow Screen Header Controls -->
+            <div id="mobile-header-controls" class="mobile-header-nav items-center space-x-2">
                 <!-- Compact Status Dot for Mobile -->
                 <div id="comfy-status-badge-mobile" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm">
                     <span id="status-dot-mobile" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400"></span>
@@ -121,7 +121,7 @@
         </div>
 
         <!-- Collapsible Mobile / Responsive Menu Drawer -->
-        <div id="mobile-menu" class="hidden lg:hidden border-t border-pink-500/20 bg-[#0c0d1b]/98 backdrop-blur-2xl px-4 py-4 space-y-3.5 shadow-2xl transition-all">
+        <div id="mobile-menu" class="hidden border-t border-pink-500/20 bg-[#0c0d1b]/98 backdrop-blur-2xl px-4 py-4 space-y-3.5 shadow-2xl transition-all">
             <!-- Mobile Navigation Tabs -->
             <div class="grid grid-cols-3 gap-2">
                 <button id="mobile-tab-generator" onclick="switchTab('generator'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-bold transition-all text-white anime-brand-pill border border-pink-500/40">
@@ -930,6 +930,6 @@
     <div id="toast-container" class="fixed bottom-4 right-4 z-[3000] space-y-2 pointer-events-none"></div>
 
     <!-- Main JavaScript Logic -->
-    <script src="/static/app.js?v=1.3.3"></script>
+    <script src="/static/app.js?v=1.3.4"></script>
 </body>
 </html>

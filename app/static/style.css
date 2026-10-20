@@ -503,9 +503,20 @@ input[type="range"]::-webkit-slider-thumb:hover {
     }
 }
 
-@media (min-width: 2560px) {
-    body {
-        font-size: 16.5px;
+/* Responsive Window Resolution Header Controls */
+.desktop-header-nav {
+    display: none;
+}
+.mobile-header-nav {
+    display: flex;
+}
+
+@media (min-width: 1360px) {
+    .desktop-header-nav {
+        display: flex;
+    }
+    .mobile-header-nav {
+        display: none;
     }
 }
 
