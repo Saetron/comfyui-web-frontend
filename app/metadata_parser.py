@@ -1,10 +1,36 @@
 import json
-import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from PIL import Image, ExifTags
+
+from app.config import OUTPUT_DIR
+
+_RES_PATTERN = re.compile(r"(\d+)\s*[xX*×]\s*(\d+)")
+
+
+def format_file_size(size_bytes: int) -> str:
+    """Format byte size into a human-readable KB or MB string."""
+    size_kb = size_bytes / 1024
+    return f"{size_kb:.1f} KB" if size_kb < 1024 else f"{size_kb / 1024:.2f} MB"
+
+
+def _extract_clip_text(inputs: Dict[str, Any]) -> str:
+    """Extract prompt string from CLIPTextEncode or SDXL CLIP inputs."""
+    return str(inputs.get("text") or inputs.get("text_g") or inputs.get("text_l", ""))
+
+
+def _parse_resolution_string(val: Any) -> Optional[Tuple[int, int]]:
+    """Parse width and height from a resolution string like '1024x1024 (1:1)'."""
+    if val and isinstance(val, str):
+        m = _RES_PATTERN.search(val)
+        if m:
+            try:
+                return int(m.group(1)), int(m.group(2))
+            except (ValueError, TypeError):
+                pass
+    return None
 
 
 def parse_a1111_parameters(text: str) -> Dict[str, Any]:
@@ -23,7 +49,7 @@ def parse_a1111_parameters(text: str) -> Dict[str, Any]:
     for line in lines:
         if line.startswith("Negative prompt:"):
             current_section = "negative"
-            neg_lines.append(line.replace("Negative prompt:", "").strip())
+            neg_lines.append(line.replace("Negative prompt:", "", 1).strip())
         elif current_section == "prompt" and not line.startswith("Steps:"):
             prompt_lines.append(line)
         elif current_section == "negative" and not line.startswith("Steps:"):
@@ -102,11 +128,16 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
                     except (ValueError, IndexError):
                         pass
                 elif isinstance(widgets, dict):
-                    if "steps" in widgets: params["steps"] = int(widgets["steps"])
-                    if "cfg" in widgets: params["cfg"] = float(widgets["cfg"])
-                    if "sampler_name" in widgets: params["sampler_name"] = str(widgets["sampler_name"])
-                    if "scheduler" in widgets: params["scheduler"] = str(widgets["scheduler"])
-                    if "seed" in widgets: params["seed"] = widgets["seed"]
+                    if "steps" in widgets:
+                        params["steps"] = int(widgets["steps"])
+                    if "cfg" in widgets:
+                        params["cfg"] = float(widgets["cfg"])
+                    if "sampler_name" in widgets:
+                        params["sampler_name"] = str(widgets["sampler_name"])
+                    if "scheduler" in widgets:
+                        params["scheduler"] = str(widgets["scheduler"])
+                    if "seed" in widgets:
+                        params["seed"] = widgets["seed"]
 
             # Checkpoint Loader
             elif "CheckpointLoader" in ntype or "Loader" in ntype:
@@ -168,8 +199,8 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
             checkpoint_node = node
         elif (
             "EmptyLatentImage" in class_type
-            or any(k in class_type for k in ["EmptyLatent", "EmptySD", "Aspect"])
-            or ("width" in inputs and "height" in inputs and any(k in class_type for k in ["Latent", "Image", "Resolution"]))
+            or any(k in class_type for k in ("EmptyLatent", "EmptySD", "Aspect"))
+            or ("width" in inputs and "height" in inputs and any(k in class_type for k in ("Latent", "Image", "Resolution")))
             or "empty_latent_width" in inputs
         ):
             latent_node = node
@@ -187,7 +218,7 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
                 curr_node = prompt_graph[curr_id]
                 c_inputs = curr_node.get("inputs", {})
                 c_type = curr_node.get("class_type", "")
-                if "width" in c_inputs or "empty_latent_width" in c_inputs or any(k in c_type for k in ["EmptyLatent", "EmptySD", "Latent", "Aspect"]):
+                if "width" in c_inputs or "empty_latent_width" in c_inputs or any(k in c_type for k in ("EmptyLatent", "EmptySD", "Latent", "Aspect")):
                     latent_node = curr_node
                     break
                 upstream = c_inputs.get("samples") or c_inputs.get("latent") or c_inputs.get("latent_image")
@@ -228,22 +259,18 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(pos_link, list) and len(pos_link) > 0:
             pos_node_id = str(pos_link[0])
             if pos_node_id in prompt_graph:
-                pos_node = prompt_graph[pos_node_id]
-                p_inputs = pos_node.get("inputs", {})
-                params["positive_prompt"] = p_inputs.get("text") or p_inputs.get("text_g") or p_inputs.get("text_l", "")
+                params["positive_prompt"] = _extract_clip_text(prompt_graph[pos_node_id].get("inputs", {}))
 
         if isinstance(neg_link, list) and len(neg_link) > 0:
             neg_node_id = str(neg_link[0])
             if neg_node_id in prompt_graph:
-                neg_node = prompt_graph[neg_node_id]
-                n_inputs = neg_node.get("inputs", {})
-                params["negative_prompt"] = n_inputs.get("text") or n_inputs.get("text_g") or n_inputs.get("text_l", "")
+                params["negative_prompt"] = _extract_clip_text(prompt_graph[neg_node_id].get("inputs", {}))
 
     # Fallback for prompts if not found through KSampler link
     if "positive_prompt" not in params or "negative_prompt" not in params:
-        for node_id, node in clip_nodes:
+        for _, node in clip_nodes:
             title = str(node.get("_meta", {}).get("title", "")).lower()
-            text = node.get("inputs", {}).get("text") or node.get("inputs", {}).get("text_g") or node.get("inputs", {}).get("text_l", "")
+            text = _extract_clip_text(node.get("inputs", {}))
             if "positive_prompt" not in params and ("positive" in title or "pos" in title):
                 params["positive_prompt"] = text
             elif "negative_prompt" not in params and ("negative" in title or "neg" in title):
@@ -251,17 +278,20 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
 
         # If still missing and we have clip nodes, take first as positive, second as negative
         if "positive_prompt" not in params and len(clip_nodes) > 0:
-            c0_inputs = clip_nodes[0][1].get("inputs", {})
-            params["positive_prompt"] = c0_inputs.get("text") or c0_inputs.get("text_g") or c0_inputs.get("text_l", "")
+            params["positive_prompt"] = _extract_clip_text(clip_nodes[0][1].get("inputs", {}))
         if "negative_prompt" not in params and len(clip_nodes) > 1:
-            c1_inputs = clip_nodes[1][1].get("inputs", {})
-            params["negative_prompt"] = c1_inputs.get("text") or c1_inputs.get("text_g") or c1_inputs.get("text_l", "")
+            params["negative_prompt"] = _extract_clip_text(clip_nodes[1][1].get("inputs", {}))
 
     # Checkpoint model
     if checkpoint_node:
         ckpt_name = checkpoint_node.get("inputs", {}).get("ckpt_name")
         if ckpt_name:
             params["model"] = str(ckpt_name)
+
+    def _set_dims(w_val: int, h_val: int):
+        params["width"] = w_val
+        params["height"] = h_val
+        params["generation_resolution"] = f"{w_val}x{h_val}"
 
     # Resolution
     if latent_node:
@@ -279,29 +309,20 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
 
         if width and height:
             try:
-                params["width"] = int(width)
-                params["height"] = int(height)
-                params["generation_resolution"] = f"{params['width']}x{params['height']}"
+                _set_dims(int(width), int(height))
             except (ValueError, TypeError):
                 pass
 
         if "width" not in params or "height" not in params:
-            for rk in ["resolution", "dimensions", "aspect_ratio", "preset", "size"]:
-                val = inputs.get(rk)
-                if val and isinstance(val, str):
-                    m = re.search(r'(\d+)\s*[xX*×]\s*(\d+)', val)
-                    if m:
-                        try:
-                            params["width"] = int(m.group(1))
-                            params["height"] = int(m.group(2))
-                            params["generation_resolution"] = f"{params['width']}x{params['height']}"
-                            break
-                        except (ValueError, TypeError):
-                            pass
+            for rk in ("resolution", "dimensions", "aspect_ratio", "preset", "size"):
+                dims = _parse_resolution_string(inputs.get(rk))
+                if dims:
+                    _set_dims(*dims)
+                    break
 
     # Fallback: scan all nodes if width/height not resolved yet
     if "width" not in params or "height" not in params:
-        for nid, node in prompt_graph.items():
+        for node in prompt_graph.values():
             if not isinstance(node, dict):
                 continue
             n_in = node.get("inputs", {})
@@ -309,24 +330,15 @@ def parse_comfyui_prompt_graph(prompt_graph: Dict[str, Any]) -> Dict[str, Any]:
             h = n_in.get("height") or n_in.get("empty_latent_height")
             if isinstance(w, (int, float, str)) and isinstance(h, (int, float, str)):
                 try:
-                    params["width"] = int(w)
-                    params["height"] = int(h)
-                    params["generation_resolution"] = f"{params['width']}x{params['height']}"
+                    _set_dims(int(w), int(h))
                     break
                 except (ValueError, TypeError):
                     pass
-            for rk in ["resolution", "dimensions", "aspect_ratio"]:
-                val = n_in.get(rk)
-                if val and isinstance(val, str):
-                    m = re.search(r'(\d+)\s*[xX*×]\s*(\d+)', val)
-                    if m:
-                        try:
-                            params["width"] = int(m.group(1))
-                            params["height"] = int(m.group(2))
-                            params["generation_resolution"] = f"{params['width']}x{params['height']}"
-                            break
-                        except (ValueError, TypeError):
-                            pass
+            for rk in ("resolution", "dimensions", "aspect_ratio"):
+                dims = _parse_resolution_string(n_in.get(rk))
+                if dims:
+                    _set_dims(*dims)
+                    break
             if "width" in params and "height" in params:
                 break
 
@@ -338,10 +350,8 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
     Extract embedded generation metadata and file stats from an image.
     Supports ComfyUI PNG text chunks, A1111 parameters, EXIF UserComment, etc.
     """
-    # Calculate path relative to OUTPUT_DIR if applicable
     rel = file_path.name
     try:
-        from app.config import OUTPUT_DIR
         resolved_file = file_path.resolve()
         if resolved_file.is_relative_to(OUTPUT_DIR):
             rel = resolved_file.relative_to(OUTPUT_DIR).as_posix()
@@ -378,14 +388,8 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
         metadata["file_size"] = stat.st_size
         metadata["modified_timestamp"] = stat.st_mtime
         metadata["modified_at"] = datetime.fromtimestamp(stat.st_mtime).isoformat()
-
-        # Format human-readable file size
-        size_kb = stat.st_size / 1024
-        if size_kb < 1024:
-            metadata["file_size_human"] = f"{size_kb:.1f} KB"
-        else:
-            metadata["file_size_human"] = f"{size_kb / 1024:.2f} MB"
-    except Exception as e:
+        metadata["file_size_human"] = format_file_size(stat.st_size)
+    except Exception:
         pass
 
     try:
@@ -411,10 +415,7 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
             prompt_str = raw_info.get("prompt")
             if prompt_str:
                 try:
-                    if isinstance(prompt_str, str):
-                        prompt_graph = json.loads(prompt_str)
-                    else:
-                        prompt_graph = prompt_str
+                    prompt_graph = json.loads(prompt_str) if isinstance(prompt_str, str) else prompt_str
                     metadata["raw"]["prompt"] = prompt_graph
                     parsed_comfy = parse_comfyui_prompt_graph(prompt_graph)
                     metadata["parsed"].update(parsed_comfy)
@@ -426,10 +427,9 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
             workflow_str = raw_info.get("workflow")
             if workflow_str:
                 try:
-                    if isinstance(workflow_str, str):
-                        metadata["raw"]["workflow"] = json.loads(workflow_str)
-                    else:
-                        metadata["raw"]["workflow"] = workflow_str
+                    metadata["raw"]["workflow"] = (
+                        json.loads(workflow_str) if isinstance(workflow_str, str) else workflow_str
+                    )
                 except Exception:
                     pass
 
@@ -450,7 +450,6 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
                     for tag_id, value in exif.items():
                         tag_name = ExifTags.TAGS.get(tag_id, str(tag_id))
                         if tag_name in ("UserComment", "ImageDescription") and isinstance(value, str):
-                            # Try parsing as JSON first
                             try:
                                 parsed_json = json.loads(value)
                                 if isinstance(parsed_json, dict):
@@ -473,3 +472,4 @@ def extract_image_metadata(file_path: Path) -> Dict[str, Any]:
         metadata["error"] = str(e)
 
     return metadata
+

@@ -42,7 +42,7 @@ USER_TAGS_DIR = DATA_DIR / "tags"
 CONFIG_DIR = Path("/app/config") if is_in_docker else (BASE_DIR / "config")
 DATA_EXTRA_DIR = Path("/app/data_extra") if is_in_docker else (BASE_DIR / "data")
 
-WORKFLOW_SEARCH_DIRS = [
+_raw_search_dirs = [
     WORKFLOWS_DIR,
     DATA_DIR,
     CONFIG_DIR / "workflows",
@@ -54,12 +54,10 @@ WORKFLOW_SEARCH_DIRS = [
     BASE_DIR / "appdata",
 ]
 
+# Deduplicate search directories while preserving priority order
+WORKFLOW_SEARCH_DIRS = list(dict.fromkeys(d.resolve() for d in _raw_search_dirs))
+
 # Ensure essential directories exist
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
-USER_TAGS_DIR.mkdir(parents=True, exist_ok=True)
-WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-DATA_EXTRA_DIR.mkdir(parents=True, exist_ok=True)
+for _dir in (OUTPUT_DIR, DATA_DIR, THUMBNAILS_DIR, USER_TAGS_DIR, WORKFLOWS_DIR, CONFIG_DIR, DATA_EXTRA_DIR):
+    _dir.mkdir(parents=True, exist_ok=True)
 

@@ -2,13 +2,12 @@ import asyncio
 import hashlib
 import logging
 import os
-import shutil
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from PIL import Image
 
 from app.config import OUTPUT_DIR, THUMBNAILS_DIR
-from app.metadata_parser import extract_image_metadata
+from app.metadata_parser import extract_image_metadata, format_file_size
 
 logger = logging.getLogger("gallery")
 
@@ -20,6 +19,7 @@ class GalleryService:
         self.output_dir = output_dir.resolve()
         self.thumbnails_dir = thumbnails_dir.resolve()
         self._images_cache: Dict[str, Dict[str, Any]] = {}
+        self._metadata_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
         self._watcher_task: Optional[asyncio.Task] = None
         self._broadcast_callbacks: List[Callable[[Dict[str, Any]], Any]] = []
         self._lock: Optional[asyncio.Lock] = None
@@ -29,6 +29,11 @@ class GalleryService:
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
+
+    @property
+    def total_images(self) -> int:
+        """Return total number of indexed images in O(1) time."""
+        return len(self._images_cache)
 
     def register_broadcast_callback(self, cb: Callable[[Dict[str, Any]], Any]):
         self._broadcast_callbacks.append(cb)
@@ -51,12 +56,12 @@ class GalleryService:
             # If user or frontend provided absolute output path, strip the prefix
             if clean_str.startswith(out_str):
                 clean_str = clean_str[len(out_str):]
-            elif clean_str.lstrip("/").startswith("app/output"):
-                clean_str = clean_str.lstrip("/")[len("app/output"):]
-            elif clean_str.lstrip("/").startswith("output/"):
-                clean_str = clean_str.lstrip("/")[len("output/"):]
-            elif clean_str.lstrip("/").startswith("output"):
-                clean_str = clean_str.lstrip("/")[len("output"):]
+            else:
+                stripped = clean_str.lstrip("/")
+                for prefix in ("app/output/", "app/output", "output/", "output"):
+                    if stripped.startswith(prefix):
+                        clean_str = stripped[len(prefix):]
+                        break
 
             rel = Path(clean_str.strip("/\\"))
             target = (self.output_dir / rel).resolve()
@@ -84,11 +89,9 @@ class GalleryService:
 
         try:
             with Image.open(file_path) as img:
-                # Convert RGBA to RGB with white background if saving as JPEG, or keep RGBA for WEBP
-                img_copy = img.copy()
-                img_copy.thumbnail((400, 400), Image.Resampling.LANCZOS)
+                img.thumbnail((400, 400), Image.Resampling.LANCZOS)
                 thumb_path.parent.mkdir(parents=True, exist_ok=True)
-                img_copy.save(thumb_path, format="WEBP", quality=85)
+                img.save(thumb_path, format="WEBP", quality=85)
                 return thumb_path
         except Exception as e:
             logger.error(f"Failed to create thumbnail for {file_path}: {e}")
@@ -99,8 +102,6 @@ class GalleryService:
         file_path = file_path.resolve()
         rel = file_path.relative_to(self.output_dir).as_posix()
         stat = file_path.stat()
-        size_kb = stat.st_size / 1024
-        size_human = f"{size_kb:.1f} KB" if size_kb < 1024 else f"{size_kb / 1024:.2f} MB"
 
         return {
             "filename": file_path.name,
@@ -108,29 +109,33 @@ class GalleryService:
             "subfolder": file_path.parent.relative_to(self.output_dir).as_posix() if file_path.parent != self.output_dir else "",
             "modified_timestamp": stat.st_mtime,
             "file_size": stat.st_size,
-            "file_size_human": size_human,
+            "file_size_human": format_file_size(stat.st_size),
             "extension": file_path.suffix.lower(),
         }
 
+    def _scan_sync(self) -> Dict[str, Dict[str, Any]]:
+        """Synchronous helper to walk output_dir and build image summaries."""
+        found: Dict[str, Dict[str, Any]] = {}
+        if self.output_dir.exists():
+            for root, _, files in os.walk(self.output_dir):
+                for file in files:
+                    p = Path(root) / file
+                    if p.suffix.lower() in VALID_EXTENSIONS:
+                        try:
+                            summary = self._build_item_summary(p)
+                            found[summary["relative_path"]] = summary
+                        except Exception as e:
+                            logger.warning(f"Could not read {p}: {e}")
+        return found
+
     async def scan(self):
         """Crawl the output directory on startup to index all images."""
+        found = await asyncio.to_thread(self._scan_sync)
         async with self.lock:
-            found: Dict[str, Dict[str, Any]] = {}
-            if self.output_dir.exists():
-                for root, _, files in os.walk(self.output_dir):
-                    for file in files:
-                        p = Path(root) / file
-                        if p.suffix.lower() in VALID_EXTENSIONS:
-                            try:
-                                summary = self._build_item_summary(p)
-                                found[summary["relative_path"]] = summary
-                            except Exception as e:
-                                logger.warning(f"Could not read {p}: {e}")
-
             self._images_cache = found
             logger.info(f"Scanned output directory: found {len(self._images_cache)} images.")
 
-    def list_images(self, query: str = "", sort: str = "newest", limit: int = 100, offset: int = 0) -> Dict[str, Any]:
+    def list_images(self, query: str = "", sort: str = "newest", limit: Optional[int] = 100, offset: int = 0) -> Dict[str, Any]:
         """List indexed images with search, sorting, and pagination."""
         items = list(self._images_cache.values())
 
@@ -163,11 +168,28 @@ class GalleryService:
         }
 
     def get_metadata(self, relative_path: str) -> Optional[Dict[str, Any]]:
-        """Get full embedded generation metadata for an image."""
+        """Get full embedded generation metadata for an image, using mtime-validated cache."""
         file_path = self.safe_resolve(relative_path)
         if not file_path or not file_path.exists():
             return None
-        return extract_image_metadata(file_path)
+
+        try:
+            rel_key = file_path.relative_to(self.output_dir).as_posix()
+            mtime = file_path.stat().st_mtime
+            cached = self._metadata_cache.get(rel_key)
+            if cached and cached[0] == mtime:
+                return cached[1]
+        except Exception:
+            rel_key = relative_path
+            mtime = 0.0
+
+        meta = extract_image_metadata(file_path)
+        if meta and mtime > 0:
+            if len(self._metadata_cache) >= 512:
+                # Evict oldest inserted entry when cache reaches capacity
+                self._metadata_cache.pop(next(iter(self._metadata_cache)), None)
+            self._metadata_cache[rel_key] = (mtime, meta)
+        return meta
 
     async def delete_image(self, relative_path: str) -> bool:
         """Permanently delete an image and its thumbnail from the mounted volume."""
@@ -210,6 +232,8 @@ class GalleryService:
             async with self.lock:
                 self._images_cache.pop(clean_rel, None)
                 self._images_cache.pop(relative_path, None)
+                self._metadata_cache.pop(clean_rel, None)
+                self._metadata_cache.pop(relative_path, None)
 
             # Broadcast event to frontend
             await self.broadcast({
@@ -232,21 +256,31 @@ class GalleryService:
         logger.info(f"Starting directory watcher for {self.output_dir}")
         try:
             async for changes in awatch(self.output_dir):
-                for change, raw_path in changes:
-                    p = Path(raw_path)
-                    if p.suffix.lower() not in VALID_EXTENSIONS:
+                valid_changes = [
+                    (change, Path(raw_path))
+                    for change, raw_path in changes
+                    if Path(raw_path).suffix.lower() in VALID_EXTENSIONS
+                ]
+                if not valid_changes:
+                    continue
+
+                # Give newly created/modified files a brief moment once per batch to finish writing
+                if any(c in (Change.added, Change.modified) for c, _ in valid_changes):
+                    await asyncio.sleep(0.25)
+
+                for change, p in valid_changes:
+                    try:
+                        rel_path = p.relative_to(self.output_dir).as_posix()
+                    except ValueError:
                         continue
 
-                    rel_path = p.relative_to(self.output_dir).as_posix()
-
                     if change in (Change.added, Change.modified):
-                        # Give file a brief moment to finish writing if newly created
-                        await asyncio.sleep(0.3)
                         if p.exists():
                             try:
-                                summary = self._build_item_summary(p)
+                                summary = await asyncio.to_thread(self._build_item_summary, p)
                                 async with self.lock:
                                     self._images_cache[rel_path] = summary
+                                    self._metadata_cache.pop(rel_path, None)
                                 await self.broadcast({
                                     "type": "gallery_item_added",
                                     "item": summary,
@@ -257,6 +291,7 @@ class GalleryService:
                     elif change == Change.deleted:
                         async with self.lock:
                             self._images_cache.pop(rel_path, None)
+                            self._metadata_cache.pop(rel_path, None)
                         await self.broadcast({
                             "type": "gallery_item_deleted",
                             "relative_path": rel_path,
@@ -269,3 +304,4 @@ class GalleryService:
 
 # Global instance
 gallery_service = GalleryService(OUTPUT_DIR, THUMBNAILS_DIR)
+
