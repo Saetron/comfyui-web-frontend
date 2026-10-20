@@ -156,8 +156,10 @@ if STATIC_DIR.exists():
 async def get_index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
+        content = index_file.read_text(encoding="utf-8")
+        content = content.replace("{{VERSION}}", f"v{__version__}")
         return HTMLResponse(
-            content=index_file.read_text(encoding="utf-8"),
+            content=content,
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
     return HTMLResponse("<h3>ComfyUI Web UI loading...</h3>")

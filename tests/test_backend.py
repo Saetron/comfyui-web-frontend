@@ -278,3 +278,10 @@ def test_version_and_config():
     client = TestClient(app)
     cfg = client.get("/api/config").json()
     assert cfg["version"] == "1.1.1"
+
+    # Verify dynamic version injection in root index.html
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "v1.1.1 🌸" in resp.text
+    assert "{{VERSION}}" not in resp.text
+    assert "v1.2" not in resp.text

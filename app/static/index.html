@@ -44,7 +44,7 @@
                     <h1 class="font-extrabold text-base sm:text-lg leading-tight tracking-tight text-white flex items-center gap-2">
                         <span>ComfyUI Studio</span>
                         <span class="text-pink-400 font-semibold text-xs tracking-wider">スタジオ</span>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40">v1.2 🌸</span>
+                        <span id="header-version-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40">{{VERSION}} 🌸</span>
                     </h1>
                 </div>
             </div>
@@ -180,21 +180,21 @@
                                     <span class="text-[11px] text-pink-400/80 font-normal">呪文 (Type for suggestions)</span>
                                 </div>
                                 <!-- Utilities -->
-                                <div class="flex items-center space-x-1.5">
+                                <div class="flex items-center space-x-1.5 shrink-0">
                                     <button type="button" onclick="convertActivePromptSpacesToUnderscores()" title="Convert spaces to underscores in active prompt"
-                                        class="px-2 py-0.5 bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-mono transition-colors">
+                                        class="h-7 px-2 inline-flex items-center justify-center whitespace-nowrap bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-mono transition-colors">
                                         space➔_
                                     </button>
                                     <button type="button" onclick="convertActivePromptUnderscoresToSpaces()" title="Convert underscores to spaces in active prompt"
-                                        class="px-2 py-0.5 bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-mono transition-colors">
+                                        class="h-7 px-2 inline-flex items-center justify-center whitespace-nowrap bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-mono transition-colors">
                                         _➔space
                                     </button>
                                     <button type="button" onclick="cleanPromptTags()" title="Deduplicate tags and clean commas"
-                                        class="px-2 py-0.5 bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-bold transition-colors">
-                                        🧹 Clean
+                                        class="h-7 px-2 inline-flex items-center justify-center whitespace-nowrap gap-1 bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-bold transition-colors">
+                                        <span>🧹</span><span>Clean</span>
                                     </button>
                                     <button type="button" id="btn-toggle-newlines" onclick="toggleAutoNewlines()" title="Auto-replace newlines with commas (Active)"
-                                        class="px-2 py-0.5 bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 rounded-lg border border-pink-500/40 text-[11px] font-bold transition-colors flex items-center gap-1 shadow-sm">
+                                        class="h-7 px-2 inline-flex items-center justify-center whitespace-nowrap bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 rounded-lg border border-pink-500/40 text-[11px] font-bold transition-colors gap-1 shadow-sm">
                                         <span>⏎➔,</span>
                                         <span id="badge-toggle-newlines" class="text-[9px] font-extrabold text-emerald-400">ON</span>
                                     </button>

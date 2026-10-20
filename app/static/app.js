@@ -530,6 +530,11 @@ async function checkComfyStatus() {
         const text = document.getElementById('status-text');
         const textMobile = document.getElementById('status-text-mobile');
 
+        if (data.version) {
+            const verBadge = document.getElementById('header-version-badge');
+            if (verBadge) verBadge.textContent = `v${data.version} 🌸`;
+        }
+
         if (data.default_negative_prompt) {
             state.defaultNegativePrompt = data.default_negative_prompt;
             const negInput = document.getElementById('negative-prompt');

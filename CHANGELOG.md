@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.1.1] - 2026-10-20
 
+### 🌸 UI & Layout
+- **Dynamic Version Injection**: Automatically inject and synchronize backend version (`__version__`) into `index.html` on root request and via client status polling, ensuring the header badge never drifts out of sync.
+- **Unified Button Heights**: Fixed tag utility buttons (`space➔_`, `_➔space`, `🧹 Clean`, and `⏎➔, ON`) to uniform heights (`h-7`) with `whitespace-nowrap`, resolving uneven button heights and text wrapping.
+
 ### ⚙️ CI / Build Workflow
 - **Restricted Build & Publish Trigger**: Modified `.github/workflows/docker-publish.yml` to trigger image publishing strictly on explicit version tags (`v*.*.*`), preventing automatic publishing/bumping on regular branch pushes to `main`.
 - **Pinned Docker Release Tags**: Set the `:latest` and semver container image tags to be created exclusively during formal tag releases.
