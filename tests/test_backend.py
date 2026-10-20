@@ -271,7 +271,10 @@ def test_comfy_service_inject_and_extract(monkeypatch, tmp_path):
     assert resolved["height"] == 1024
 
 
+def test_version_and_config():
+    from app import __version__
+    assert __version__ == "1.1.0"
 
-
-
-
+    client = TestClient(app)
+    cfg = client.get("/api/config").json()
+    assert cfg["version"] == "1.1.0"

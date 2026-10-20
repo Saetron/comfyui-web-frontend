@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from app import __version__
 from app.config import (
     COMFYUI_URL,
     DATA_DIR,
@@ -134,7 +135,7 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown complete.")
 
 
-app = FastAPI(title="ComfyUI Web Interface", lifespan=lifespan)
+app = FastAPI(title="ComfyUI Web Interface", version=__version__, lifespan=lifespan)
 
 # Allow CORS for development convenience
 app.add_middleware(
@@ -166,6 +167,7 @@ async def get_index():
 async def get_config():
     """Get system and UI configuration defaults."""
     return {
+        "version": __version__,
         "default_negative_prompt": DEFAULT_NEGATIVE_PROMPT,
         "comfyui_url": COMFYUI_URL,
     }
@@ -176,6 +178,7 @@ async def get_status():
     """Get status of ComfyUI backend, defaults, and gallery directory stats."""
     comfy_health = await comfy_service.check_health()
     return {
+        "version": __version__,
         "comfyui": comfy_health,
         "output_dir": str(OUTPUT_DIR),
         "total_images": gallery_service.total_images,
