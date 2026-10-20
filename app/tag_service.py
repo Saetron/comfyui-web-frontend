@@ -34,7 +34,18 @@ def format_count(count: int) -> str:
 
 
 class TagItem:
-    __slots__ = ("name", "name_lower", "name_normalized", "category", "category_name", "count", "count_formatted", "aliases", "aliases_list")
+    __slots__ = (
+        "name",
+        "name_lower",
+        "name_normalized",
+        "category",
+        "category_name",
+        "count",
+        "count_formatted",
+        "aliases",
+        "aliases_list",
+        "_dict",
+    )
 
     def __init__(self, name: str, category: int, count: int, aliases: str = ""):
         self.name = name
@@ -45,17 +56,20 @@ class TagItem:
         self.count = count
         self.count_formatted = format_count(count)
         self.aliases = aliases
-        self.aliases_list = [a.strip().lower() for a in aliases.split(",") if a.strip()]
+        self.aliases_list = tuple(a.strip().lower() for a in aliases.split(",") if a.strip()) if aliases else ()
+        self._dict: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "category": self.category,
-            "category_name": self.category_name,
-            "count": self.count,
-            "count_formatted": self.count_formatted,
-            "aliases": self.aliases,
-        }
+        if self._dict is None:
+            self._dict = {
+                "name": self.name,
+                "category": self.category,
+                "category_name": self.category_name,
+                "count": self.count,
+                "count_formatted": self.count_formatted,
+                "aliases": self.aliases,
+            }
+        return self._dict
 
 
 class TagService:
@@ -63,6 +77,7 @@ class TagService:
         self.tags: List[TagItem] = []
         self._loaded = False
         self._prefix_index: Dict[str, List[int]] = {}
+        self._word_index: Dict[str, List[int]] = {}
 
     def load_tags(self):
         """Load default Danbooru tags and any custom user CSV tags."""
@@ -109,16 +124,38 @@ class TagService:
         all_tags.sort(key=lambda t: t.count, reverse=True)
         self.tags = all_tags
 
-        # Build 2-character prefix index for fast typing lookup
+        # Build 2-character prefix and word/alias indices for fast lookup
         prefix_idx: Dict[str, List[int]] = {}
+        word_idx: Dict[str, List[int]] = {}
+
         for idx, tag in enumerate(self.tags):
-            if len(tag.name_lower) >= 2:
-                p2 = tag.name_lower[:2]
+            name_low = tag.name_lower
+            if len(name_low) >= 2:
+                p2 = name_low[:2]
                 prefix_idx.setdefault(p2, []).append(idx)
                 p2_norm = tag.name_normalized[:2]
                 if p2_norm != p2:
                     prefix_idx.setdefault(p2_norm, []).append(idx)
+
+            # Index subsequent word tokens and aliases by their 2-char prefixes
+            word_prefixes: Set[str] = set()
+            if "_" in name_low:
+                for part in name_low.split("_")[1:]:
+                    if len(part) >= 2:
+                        word_prefixes.add(part[:2])
+            for alias in tag.aliases_list:
+                if len(alias) >= 2:
+                    word_prefixes.add(alias[:2])
+                if "_" in alias:
+                    for apart in alias.split("_")[1:]:
+                        if len(apart) >= 2:
+                            word_prefixes.add(apart[:2])
+
+            for wp in word_prefixes:
+                word_idx.setdefault(wp, []).append(idx)
+
         self._prefix_index = prefix_idx
+        self._word_index = word_idx
         self._loaded = True
         logger.info(f"Danbooru tag service initialized with {len(self.tags):,} tags.")
 
@@ -136,12 +173,9 @@ class TagService:
 
         q = query.strip().lower()
         if not q:
-            # Return top tags
             if category is not None:
-                matches = [t.to_dict() for t in self.tags if t.category == category][:limit]
-            else:
-                matches = [t.to_dict() for t in self.tags[:limit]]
-            return matches
+                return [t.to_dict() for t in self.tags if t.category == category][:limit]
+            return [t.to_dict() for t in self.tags[:limit]]
 
         q_norm = q.replace("_", " ")
         q_under = q.replace(" ", "_")
@@ -152,50 +186,85 @@ class TagService:
         substring_matches: List[TagItem] = []
         alias_matches: List[TagItem] = []
 
-        seen_indices: Set[int] = set()
+        if len(q_under) >= 2:
+            p2 = q_under[:2]
+            checked_indices: Set[int] = set()
 
-        # If prefix query of length >= 2, use prefix index to narrow candidates
-        candidate_indices = None
-        if len(q_under) >= 2 and q_under[:2] in self._prefix_index:
-            candidate_indices = self._prefix_index[q_under[:2]]
+            # 1 & 2. Check prefix index for exact and prefix matches
+            for idx in self._prefix_index.get(p2, ()):
+                tag = self.tags[idx]
+                if category is not None and tag.category != category:
+                    continue
+                checked_indices.add(idx)
+                name = tag.name_lower
+                norm = tag.name_normalized
+                if name == q_under or norm == q_norm:
+                    exact_matches.append(tag)
+                elif name.startswith(q_under) or norm.startswith(q_norm):
+                    prefix_matches.append(tag)
+                    if len(exact_matches) + len(prefix_matches) >= limit * 2:
+                        break
 
-        search_pool = [self.tags[i] for i in candidate_indices] if candidate_indices else self.tags
+            # 3 & 5. Check word/alias index for word-boundary and alias matches
+            if len(exact_matches) + len(prefix_matches) < limit * 2:
+                word_target_u = f"_{q_under}"
+                word_target_n = f" {q_norm}"
+                for idx in self._word_index.get(p2, ()):
+                    if idx in checked_indices:
+                        continue
+                    tag = self.tags[idx]
+                    if category is not None and tag.category != category:
+                        continue
+                    checked_indices.add(idx)
+                    name = tag.name_lower
+                    norm = tag.name_normalized
+                    if word_target_u in name or word_target_n in norm:
+                        word_start_matches.append(tag)
+                    else:
+                        for alias in tag.aliases_list:
+                            if alias == q_under or alias == q_norm or alias.startswith(q_under) or f"_{q_under}" in alias:
+                                alias_matches.append(tag)
+                                break
+                    if len(exact_matches) + len(prefix_matches) + len(word_start_matches) >= limit * 3:
+                        break
 
-        for tag in search_pool:
-            if category is not None and tag.category != category:
-                continue
-
-            name = tag.name_lower
-            norm = tag.name_normalized
-
-            # 1. Exact match
-            if name == q_under or norm == q_norm:
-                exact_matches.append(tag)
-                continue
-
-            # 2. Prefix match
-            if name.startswith(q_under) or norm.startswith(q_norm):
-                prefix_matches.append(tag)
-                continue
-
-            # 3. Word-boundary match (e.g., "eyes" in "blue_eyes")
-            if f"_{q_under}" in name or f" {q_norm}" in norm:
-                word_start_matches.append(tag)
-                continue
-
-            # 4. General substring
-            if q_under in name or q_norm in norm:
-                substring_matches.append(tag)
-                continue
-
-            # 5. Alias check
-            for alias in tag.aliases_list:
-                if alias == q_under or alias == q_norm or alias.startswith(q_under) or q_under in alias:
-                    alias_matches.append(tag)
+            # 4. Fallback substring scan only if indexed results are below limit
+            total_indexed = len(exact_matches) + len(prefix_matches) + len(word_start_matches) + len(alias_matches)
+            if total_indexed < limit:
+                needed = limit - total_indexed
+                for idx, tag in enumerate(self.tags):
+                    if idx in checked_indices:
+                        continue
+                    if category is not None and tag.category != category:
+                        continue
+                    if q_under in tag.name_lower or q_norm in tag.name_normalized:
+                        substring_matches.append(tag)
+                        if len(substring_matches) >= needed:
+                            break
+                    else:
+                        for alias in tag.aliases_list:
+                            if q_under in alias:
+                                alias_matches.append(tag)
+                                break
+        else:
+            # Single-character query
+            word_target_u = f"_{q_under}"
+            word_target_n = f" {q_norm}"
+            for tag in self.tags:
+                if category is not None and tag.category != category:
+                    continue
+                name = tag.name_lower
+                norm = tag.name_normalized
+                if name == q_under or norm == q_norm:
+                    exact_matches.append(tag)
+                elif name.startswith(q_under) or norm.startswith(q_norm):
+                    prefix_matches.append(tag)
+                elif word_target_u in name or word_target_n in norm:
+                    word_start_matches.append(tag)
+                elif q_under in name or q_norm in norm:
+                    substring_matches.append(tag)
+                if len(exact_matches) + len(prefix_matches) + len(word_start_matches) >= limit * 2:
                     break
-
-            if len(exact_matches) + len(prefix_matches) + len(word_start_matches) >= limit * 3:
-                break
 
         # Assemble final ranked results
         combined = exact_matches + prefix_matches + word_start_matches + substring_matches + alias_matches
@@ -220,3 +289,4 @@ class TagService:
 
 # Global tag service instance
 tag_service = TagService()
+
