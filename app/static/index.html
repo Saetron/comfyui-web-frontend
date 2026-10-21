@@ -26,25 +26,25 @@
             }
         }
     </script>
-    <link rel="stylesheet" href="/static/style.css?v=1.3.4">
+    <link rel="stylesheet" href="/static/style.css?v=1.3.5">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%200%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>🌸</text></svg>">
 </head>
 <body class="min-h-screen flex flex-col font-sans antialiased selection:bg-pink-500 selection:text-white">
 
     <!-- Top Navigation Header -->
     <header class="border-b border-pink-500/20 bg-[#0c0d1b]/85 backdrop-blur-xl sticky top-0 z-40 shadow-lg shadow-black/40">
-        <div id="header-inner-row" class="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-3">
+        <div id="header-inner-row" class="w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto px-3 sm:px-6 lg:px-8 2xl:px-12 h-16 flex items-center justify-between gap-2 sm:gap-3 overflow-hidden">
             
             <!-- Logo & Anime Title -->
-            <div class="flex items-center space-x-3 shrink-0">
-                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pink-500 via-fuchsia-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30 border border-white/20 hover:scale-105 transition-transform">
-                    <span class="text-xl sparkle-icon">✨</span>
+            <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
+                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-pink-500 via-fuchsia-500 to-purple-600 flex items-center justify-center shadow-lg shadow-pink-500/30 border border-white/20 hover:scale-105 transition-transform shrink-0">
+                    <span class="text-lg sm:text-xl sparkle-icon">✨</span>
                 </div>
-                <div>
-                    <h1 class="font-extrabold text-base sm:text-lg leading-tight tracking-tight text-white flex items-center gap-2">
-                        <span>ComfyUI Studio</span>
-                        <span class="text-pink-400 font-semibold text-xs tracking-wider">スタジオ</span>
-                        <span id="header-version-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40">{{VERSION}} 🌸</span>
+                <div class="min-w-0">
+                    <h1 class="font-extrabold text-sm sm:text-lg leading-tight tracking-tight text-white flex items-center gap-1.5 sm:gap-2">
+                        <span class="truncate">ComfyUI Studio</span>
+                        <span class="text-pink-400 font-semibold text-xs tracking-wider hidden md:inline">スタジオ</span>
+                        <span id="header-version-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40 hidden sm:inline-block shrink-0">{{VERSION}} 🌸</span>
                     </h1>
                 </div>
             </div>
@@ -99,16 +99,16 @@
             </div>
 
             <!-- Mobile / Narrow Screen Header Controls -->
-            <div id="mobile-header-controls" class="mobile-header-nav items-center space-x-2">
+            <div id="mobile-header-controls" class="mobile-header-nav items-center space-x-1.5 sm:space-x-2 shrink-0">
                 <!-- Compact Status Dot for Mobile -->
-                <div id="comfy-status-badge-mobile" class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm">
+                <div id="comfy-status-badge-mobile" class="flex items-center space-x-1.5 px-2 sm:px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/5 border border-white/10 text-zinc-300 shadow-sm shrink-0">
                     <span id="status-dot-mobile" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400"></span>
-                    <span id="status-text-mobile" class="truncate max-w-[120px]">Checking...</span>
+                    <span id="status-text-mobile" class="truncate max-w-[70px] xs:max-w-[100px] sm:max-w-[120px]">Checking...</span>
                 </div>
 
                 <!-- Hamburger Menu Button -->
                 <button type="button" id="btn-hamburger" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu"
-                    class="w-10 h-10 rounded-2xl bg-white/5 hover:bg-pink-500/20 border border-pink-500/30 text-pink-200 hover:text-white flex items-center justify-center transition-all duration-150 active:scale-95 shadow-md">
+                    class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white/5 hover:bg-pink-500/20 border border-pink-500/30 text-pink-200 hover:text-white flex items-center justify-center transition-all duration-150 active:scale-95 shadow-md shrink-0">
                     <svg id="hamburger-icon-open" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
@@ -121,36 +121,36 @@
         </div>
 
         <!-- Collapsible Mobile / Responsive Menu Drawer -->
-        <div id="mobile-menu" class="hidden border-t border-pink-500/20 bg-[#0c0d1b]/98 backdrop-blur-2xl px-4 py-4 space-y-3.5 shadow-2xl transition-all">
+        <div id="mobile-menu" class="hidden border-t border-pink-500/20 bg-[#0c0d1b]/98 backdrop-blur-2xl px-3 sm:px-4 py-3 sm:py-4 space-y-3 shadow-2xl transition-all">
             <!-- Mobile Navigation Tabs -->
-            <div class="grid grid-cols-3 gap-2">
-                <button id="mobile-tab-generator" onclick="switchTab('generator'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-bold transition-all text-white anime-brand-pill border border-pink-500/40">
+            <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
+                <button id="mobile-tab-generator" onclick="switchTab('generator'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl text-xs font-bold transition-all text-white anime-brand-pill border border-pink-500/40">
                     <span class="text-base text-pink-300">✨</span>
-                    <span class="mt-0.5">Generator</span>
+                    <span class="mt-0.5 truncate max-w-full">Generator</span>
                 </button>
-                <button id="mobile-tab-gallery" onclick="switchTab('gallery'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10">
+                <button id="mobile-tab-gallery" onclick="switchTab('gallery'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10">
                     <span class="text-base">🌸</span>
                     <span class="mt-0.5 flex items-center gap-1">
                         <span>Gallery</span>
                         <span id="mobile-gallery-count-badge" class="text-[10px] font-bold px-1.5 rounded-full bg-pink-500/20 text-pink-300">0</span>
                     </span>
                 </button>
-                <button id="mobile-tab-workflow" onclick="switchTab('workflow'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10">
+                <button id="mobile-tab-workflow" onclick="switchTab('workflow'); closeMobileMenu();" class="flex flex-col items-center justify-center p-2 sm:p-2.5 rounded-xl text-xs font-medium transition-all text-zinc-400 hover:text-pink-200 hover:bg-white/5 border border-white/10">
                     <span class="text-base">📜</span>
-                    <span class="mt-0.5">Workflows</span>
+                    <span class="mt-0.5 truncate max-w-full">Workflows</span>
                 </button>
             </div>
 
             <!-- Mobile Active Workflow Selector + Import -->
-            <div class="flex items-center justify-between gap-2 bg-white/5 border border-pink-500/25 rounded-2xl p-2.5">
-                <div class="flex items-center space-x-2 flex-1 min-w-0">
+            <div class="flex items-center justify-between gap-2 bg-white/5 border border-pink-500/25 rounded-2xl p-2 sm:p-2.5">
+                <div class="flex items-center space-x-1.5 sm:space-x-2 flex-1 min-w-0">
                     <span class="text-xs text-pink-300 font-bold shrink-0">📜 Workflow:</span>
-                    <select id="mobile-active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate flex-1">
+                    <select id="mobile-active-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-transparent text-xs text-purple-200 font-semibold focus:outline-none cursor-pointer truncate flex-1 min-w-0">
                         <option value="default">Default SD 1.5 Workflow</option>
                     </select>
                 </div>
                 <button type="button" onclick="document.getElementById('header-workflow-input').click(); closeMobileMenu();" title="Import Workflow"
-                    class="px-3 py-1.5 bg-pink-500/20 hover:bg-pink-500/40 text-pink-300 hover:text-white rounded-xl border border-pink-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1">
+                    class="px-2.5 sm:px-3 py-1.5 bg-pink-500/20 hover:bg-pink-500/40 text-pink-300 hover:text-white rounded-xl border border-pink-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1">
                     <span>📂</span>
                     <span>Import</span>
                 </button>
@@ -159,28 +159,28 @@
     </header>
 
     <!-- Main Content Container -->
-    <main class="flex-1 w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto p-4 sm:p-6 lg:p-8 2xl:p-10">
+    <main class="flex-1 w-full max-w-[1920px] 2xl:max-w-[2400px] mx-auto p-3 sm:p-6 lg:p-8 2xl:p-10 overflow-x-hidden">
 
         <!-- ========================================== -->
         <!-- VIEW 1: GENERATOR VIEW                     -->
         <!-- ========================================== -->
         <section id="view-generator" class="space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
 
                 <!-- Left Column: Generator Form -->
                 <div class="lg:col-span-6 xl:col-span-5 2xl:col-span-5 space-y-5">
-                    <div class="anime-card p-6 space-y-5">
+                    <div class="anime-card p-3.5 sm:p-6 space-y-4 sm:space-y-5">
                         
                         <!-- Danbooru Tag Helper Bar & Quick Tags Drawer -->
-                        <div class="anime-card-subtle p-3.5 space-y-3">
-                            <div class="flex items-center justify-between text-xs">
-                                <div class="flex items-center space-x-1.5 font-bold text-pink-200">
+                        <div class="anime-card-subtle p-3 sm:p-3.5 space-y-2.5 sm:space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                                <div class="flex items-center space-x-1.5 font-bold text-pink-200 min-w-0">
                                     <span class="text-pink-400 text-sm">🏷️</span>
-                                    <span>Danbooru Tags</span>
-                                    <span class="text-[11px] text-pink-400/80 font-normal">呪文 (Type for suggestions)</span>
+                                    <span class="truncate">Danbooru Tags</span>
+                                    <span class="text-[11px] text-pink-400/80 font-normal hidden xs:inline truncate">呪文 (Type for suggestions)</span>
                                 </div>
                                 <!-- Utilities -->
-                                <div class="flex items-center space-x-1.5 shrink-0">
+                                <div class="flex flex-wrap items-center gap-1 sm:gap-1.5 shrink-0">
                                     <button type="button" onclick="convertActivePromptSpacesToUnderscores()" title="Convert spaces to underscores in active prompt"
                                         class="h-7 px-2 inline-flex items-center justify-center whitespace-nowrap bg-white/5 hover:bg-pink-500/20 text-zinc-300 hover:text-pink-200 rounded-lg border border-white/10 text-[11px] font-mono transition-colors">
                                         space➔_
@@ -202,7 +202,7 @@
                             </div>
 
                             <!-- Category Quick Tabs (Palettes) -->
-                            <div class="flex flex-wrap gap-1.5 text-xs">
+                            <div class="flex flex-wrap gap-1 sm:gap-1.5 text-xs">
                                 <button type="button" onclick="toggleTagPalette('quality')" class="tag-pill-btn bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40">⭐ Quality (品質)</button>
                                 <button type="button" onclick="toggleTagPalette('subject')" class="tag-pill-btn bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40">👤 Subject (主題)</button>
                                 <button type="button" onclick="toggleTagPalette('style')" class="tag-pill-btn bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/40">🎨 Style (作風)</button>
@@ -216,11 +216,11 @@
 
                         <!-- Positive Prompt with Autocomplete -->
                         <div class="relative space-y-1.5">
-                            <div class="flex items-center justify-between">
+                            <div class="flex flex-wrap items-center justify-between gap-1">
                                 <label for="positive-prompt" class="text-xs font-bold text-pink-200 flex items-center gap-1.5">
                                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400"></span>
                                     <span>(✿◠‿◠) ✨ Positive Prompt</span>
-                                    <span class="text-emerald-400 font-normal">呪文</span>
+                                    <span class="text-emerald-400 font-normal hidden xs:inline">呪文</span>
                                 </label>
                                 <div class="flex items-center space-x-2">
                                     <span class="text-[10px] text-pink-300/70 hidden sm:inline">Tip: Ctrl+Up / Ctrl+Down to weight tags</span>
@@ -229,16 +229,16 @@
                             </div>
                             <textarea id="positive-prompt" rows="4" 
                                 placeholder="1girl, solo, masterpiece, best quality, long hair, blue eyes, school uniform, smile, looking at viewer, cherry blossoms, soft lighting, 8k..."
-                                class="w-full bg-[#0a0b16]/90 border border-pink-500/30 rounded-2xl px-4 py-3 text-sm text-pink-50 placeholder-zinc-500 focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/30 transition-all resize-y shadow-inner"></textarea>
+                                class="w-full bg-[#0a0b16]/90 border border-pink-500/30 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm text-pink-50 placeholder-zinc-500 focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/30 transition-all resize-y shadow-inner"></textarea>
                         </div>
 
                         <!-- Negative Prompt with Autocomplete -->
                         <div class="relative space-y-1.5">
-                            <div class="flex items-center justify-between">
+                            <div class="flex flex-wrap items-center justify-between gap-1">
                                 <label for="negative-prompt" class="text-xs font-bold text-rose-300 flex items-center gap-1.5">
                                     <span class="w-2.5 h-2.5 rounded-full bg-rose-400 shadow-sm shadow-rose-400"></span>
                                     <span>( &gt;_&lt; ) 🚫 Negative Filter</span>
-                                    <span class="text-rose-400 font-normal">除外</span>
+                                    <span class="text-rose-400 font-normal hidden xs:inline">除外</span>
                                 </label>
                                 <div class="flex items-center space-x-2">
                                     <button type="button" onclick="resetToDefaultNegativePrompt()" class="text-[11px] text-zinc-400 hover:text-rose-300 font-semibold transition-colors" title="Reset to standard environment negative prompt">Reset Default</button>
@@ -248,15 +248,15 @@
                             </div>
                             <textarea id="negative-prompt" rows="2" 
                                 placeholder="worst quality, low quality, bad anatomy, bad hands, missing fingers, extra digits, signature, watermark, blurry, deformed"
-                                class="w-full bg-[#0a0b16]/90 border border-rose-500/30 rounded-2xl px-4 py-3 text-sm text-rose-50 placeholder-zinc-500 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/30 transition-all resize-y shadow-inner"></textarea>
+                                class="w-full bg-[#0a0b16]/90 border border-rose-500/30 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm text-rose-50 placeholder-zinc-500 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/30 transition-all resize-y shadow-inner"></textarea>
                         </div>
 
                         <!-- Seed & Randomize Controls -->
-                        <div class="anime-card-subtle p-3.5 space-y-2.5">
-                            <div class="flex items-center justify-between">
+                        <div class="anime-card-subtle p-3 sm:p-3.5 space-y-2.5">
+                            <div class="flex flex-wrap items-center justify-between gap-1.5">
                                 <span class="text-xs font-bold text-purple-200 flex items-center gap-1.5">
                                     <span class="text-sm">🎲</span>
-                                    <span>Seed Control (乱数)</span>
+                                    <span>Seed Control <span class="hidden xs:inline">(乱数)</span></span>
                                 </span>
                                 <label class="flex items-center space-x-2 cursor-pointer select-none">
                                     <input type="checkbox" id="seed-randomize" checked onchange="toggleSeedInput()" class="w-4 h-4 rounded border-pink-500/40 bg-black/40 text-pink-500 focus:ring-pink-500 focus:ring-offset-black">
@@ -266,9 +266,9 @@
                             
                             <div class="flex items-center space-x-2">
                                 <input type="number" id="seed-input" disabled value="123456789"
-                                    class="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-pink-200 font-mono focus:outline-none focus:border-pink-500 disabled:opacity-50 transition-all">
+                                    class="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-pink-200 font-mono focus:outline-none focus:border-pink-500 disabled:opacity-50 transition-all">
                                 <button type="button" onclick="rollNewSeed()" title="Generate Random Seed"
-                                    class="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border border-white/20 rounded-xl text-xs font-bold transition-transform active:scale-95 flex items-center gap-1.5 shadow-md">
+                                    class="px-3.5 sm:px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white border border-white/20 rounded-xl text-xs font-bold transition-transform active:scale-95 flex items-center gap-1.5 shadow-md shrink-0">
                                     <span>🎲 Roll</span>
                                 </button>
                             </div>
@@ -276,35 +276,35 @@
 
                         <!-- Advanced Parameters Accordion -->
                         <div class="border border-purple-500/25 rounded-2xl overflow-hidden bg-black/30">
-                            <button type="button" onclick="toggleAdvancedAccordion()" class="w-full px-4 py-3 flex items-center justify-between text-left text-xs font-bold text-purple-200 hover:text-white hover:bg-white/5 transition-colors">
-                                <span class="flex items-center gap-2">
-                                    <span>(｡♥‿♥｡) 🎛️ Anime Tuning</span>
-                                    <span class="text-purple-400 font-normal">調整 (Steps, CFG, Size, Sampler)</span>
+                            <button type="button" onclick="toggleAdvancedAccordion()" class="w-full px-3.5 sm:px-4 py-3 flex items-center justify-between text-left text-xs font-bold text-purple-200 hover:text-white hover:bg-white/5 transition-colors">
+                                <span class="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                    <span class="truncate">(｡♥‿♥｡) 🎛️ Anime Tuning</span>
+                                    <span class="text-purple-400 font-normal hidden sm:inline">調整 (Steps, CFG, Size, Sampler)</span>
                                 </span>
-                                <svg id="adv-arrow" class="w-4 h-4 text-pink-400 transition-transform duration-200 transform rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg id="adv-arrow" class="w-4 h-4 text-pink-400 transition-transform duration-200 transform rotate-0 shrink-0 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </button>
-                            <div id="adv-content" class="hidden px-4 pb-4 pt-2 space-y-4 border-t border-purple-500/20">
+                            <div id="adv-content" class="hidden px-3.5 sm:px-4 pb-4 pt-2 space-y-4 border-t border-purple-500/20">
                                 
                                 <!-- Model Checkpoint -->
                                 <div>
                                     <label class="block text-xs font-bold text-purple-300 mb-1.5">Checkpoint Model (モデル)</label>
-                                    <select id="ckpt-select" class="w-full bg-[#0d0e1c] border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-purple-100 focus:outline-none focus:border-pink-500">
+                                    <select id="ckpt-select" class="w-full min-w-0 bg-[#0d0e1c] border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-purple-100 focus:outline-none focus:border-pink-500">
                                         <option value="">(Default from Workflow)</option>
                                     </select>
                                 </div>
 
                                 <!-- Steps & CFG -->
-                                <div class="grid grid-cols-2 gap-4">
-                                    <div>
+                                <div class="grid grid-cols-2 gap-3 sm:gap-4">
+                                    <div class="min-w-0">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="text-xs font-bold text-purple-300">Steps</label>
                                             <span id="steps-val" class="text-xs font-mono font-bold text-pink-300">20</span>
                                         </div>
                                         <input type="range" id="steps-slider" min="1" max="100" value="20" oninput="document.getElementById('steps-val').innerText = this.value">
                                     </div>
-                                    <div>
+                                    <div class="min-w-0">
                                         <div class="flex justify-between items-center mb-1">
                                             <label class="text-xs font-bold text-purple-300">CFG Scale</label>
                                             <span id="cfg-val" class="text-xs font-mono font-bold text-pink-300">7.5</span>
@@ -316,24 +316,24 @@
                                 <!-- Dimensions & Presets -->
                                 <div>
                                     <label class="block text-xs font-bold text-purple-300 mb-1.5">Canvas Resolution (解像度)</label>
-                                    <div class="flex flex-wrap gap-1.5 mb-2.5">
+                                    <div class="flex flex-wrap gap-1 sm:gap-1.5 mb-2.5">
                                         <button type="button" onclick="setResolution(512, 512)" class="res-preset-btn tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10" data-res="512x512">512×512</button>
                                         <button type="button" onclick="setResolution(768, 768)" class="res-preset-btn tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10" data-res="768x768">768×768</button>
                                         <button type="button" onclick="setResolution(1024, 1024)" class="res-preset-btn tag-pill-btn bg-white/5 hover:bg-pink-500/20 text-pink-200 border border-white/10" data-res="1024x1024">1024×1024</button>
-                                        <button type="button" onclick="setResolution(832, 1216)" class="res-preset-btn tag-pill-btn bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 font-bold" data-res="832x1216">832×1216 (Portrait 縦)</button>
-                                        <button type="button" onclick="setResolution(1216, 832)" class="res-preset-btn tag-pill-btn bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 border border-sky-500/30 font-bold" data-res="1216x832">1216×832 (Landscape 横)</button>
+                                        <button type="button" onclick="setResolution(832, 1216)" class="res-preset-btn tag-pill-btn bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30 font-bold" data-res="832x1216">832×1216 (縦)</button>
+                                        <button type="button" onclick="setResolution(1216, 832)" class="res-preset-btn tag-pill-btn bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 border border-sky-500/30 font-bold" data-res="1216x832">1216×832 (横)</button>
                                     </div>
-                                    <div class="grid grid-cols-2 gap-3">
-                                        <input type="number" id="width-input" value="512" step="64" min="64" max="4096" placeholder="Width" oninput="highlightActiveResPreset()" class="bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
-                                        <input type="number" id="height-input" value="512" step="64" min="64" max="4096" placeholder="Height" oninput="highlightActiveResPreset()" class="bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
+                                    <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                                        <input type="number" id="width-input" value="512" step="64" min="64" max="4096" placeholder="Width" oninput="highlightActiveResPreset()" class="w-full min-w-0 bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
+                                        <input type="number" id="height-input" value="512" step="64" min="64" max="4096" placeholder="Height" oninput="highlightActiveResPreset()" class="w-full min-w-0 bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-pink-100">
                                     </div>
                                 </div>
 
                                 <!-- Sampler & Scheduler -->
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
+                                <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                                    <div class="min-w-0">
                                         <label class="block text-xs font-bold text-purple-300 mb-1">Sampler</label>
-                                        <select id="sampler-select" class="w-full bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-purple-100">
+                                        <select id="sampler-select" class="w-full min-w-0 bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-purple-100">
                                             <option value="euler">euler</option>
                                             <option value="euler_ancestral">euler_ancestral</option>
                                             <option value="dpmpp_2m">dpmpp_2m</option>
@@ -344,9 +344,9 @@
                                             <option value="uni_pc">uni_pc</option>
                                         </select>
                                     </div>
-                                    <div>
+                                    <div class="min-w-0">
                                         <label class="block text-xs font-bold text-purple-300 mb-1">Scheduler</label>
-                                        <select id="scheduler-select" class="w-full bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-purple-100">
+                                        <select id="scheduler-select" class="w-full min-w-0 bg-[#0d0e1c] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-purple-100">
                                             <option value="normal">normal</option>
                                             <option value="karras">karras</option>
                                             <option value="exponential">exponential</option>
@@ -361,22 +361,22 @@
 
                         <!-- Batch Count & Queue Selector -->
                         <div class="pt-2">
-                            <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex flex-wrap items-center justify-between gap-1 mb-1.5">
                                 <label class="text-xs font-bold text-pink-300 flex items-center space-x-1.5">
                                     <span>📦</span>
-                                    <span>Batch Queue (バッチ生成)</span>
+                                    <span>Batch Queue <span class="hidden xs:inline">(バッチ生成)</span></span>
                                     <span id="batch-queue-badge" class="hidden text-[10px] bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded-full font-mono border border-pink-500/30 font-bold">1 queued</span>
                                 </label>
-                                <span class="text-[11px] text-zinc-400">Queue multiple variations</span>
+                                <span class="text-[11px] text-zinc-400">Queue variations</span>
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="flex space-x-1 flex-1">
+                            <div class="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                                <div class="flex space-x-1 flex-1 min-w-[160px]">
                                     <button type="button" onclick="setBatchCount(1)" id="batch-btn-1" class="batch-preset-btn active flex-1 py-1.5 rounded-xl text-xs font-extrabold border border-pink-500/40 bg-pink-500/20 text-pink-200 transition-all">1x</button>
                                     <button type="button" onclick="setBatchCount(2)" id="batch-btn-2" class="batch-preset-btn flex-1 py-1.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-zinc-300 hover:bg-pink-500/10 hover:border-pink-500/30 transition-all">2x</button>
                                     <button type="button" onclick="setBatchCount(4)" id="batch-btn-4" class="batch-preset-btn flex-1 py-1.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-zinc-300 hover:bg-pink-500/10 hover:border-pink-500/30 transition-all">4x</button>
                                     <button type="button" onclick="setBatchCount(8)" id="batch-btn-8" class="batch-preset-btn flex-1 py-1.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-zinc-300 hover:bg-pink-500/10 hover:border-pink-500/30 transition-all">8x</button>
                                 </div>
-                                <div class="flex items-center bg-[#0d0e1c] border border-pink-500/30 rounded-xl px-1.5 py-0.5 space-x-1">
+                                <div class="flex items-center bg-[#0d0e1c] border border-pink-500/30 rounded-xl px-1.5 py-0.5 space-x-1 shrink-0">
                                     <button type="button" onclick="adjustBatchCount(-1)" class="w-6 h-6 flex items-center justify-center text-pink-300 hover:text-white font-bold rounded hover:bg-pink-500/20 transition-colors">-</button>
                                     <input type="number" id="batch-count-input" min="1" max="50" value="1" onchange="onBatchInputChange(this.value)" class="w-10 bg-transparent text-center text-xs font-bold font-mono text-pink-200 focus:outline-none">
                                     <button type="button" onclick="adjustBatchCount(1)" class="w-6 h-6 flex items-center justify-center text-pink-300 hover:text-white font-bold rounded hover:bg-pink-500/20 transition-colors">+</button>
@@ -385,15 +385,15 @@
                         </div>
 
                         <!-- Spark Generation Action Buttons -->
-                        <div class="pt-2 flex items-center space-x-3">
+                        <div class="pt-2 flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:space-x-3">
                             <button id="btn-generate" type="button" onclick="handleGenerate()"
-                                class="flex-1 anime-btn-primary py-3.5 px-6 rounded-2xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed group">
-                                <span class="text-xl group-hover:rotate-12 transition-transform">✨</span>
-                                <span id="generate-text" class="text-sm font-extrabold tracking-wide">(★ω★) 🚀 Spark Generation!</span>
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white font-mono hidden sm:inline-block">Ctrl+Enter</span>
+                                class="flex-1 min-w-[200px] anime-btn-primary py-3 sm:py-3.5 px-4 sm:px-6 rounded-2xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed group">
+                                <span class="text-lg sm:text-xl group-hover:rotate-12 transition-transform">✨</span>
+                                <span id="generate-text" class="text-xs sm:text-sm font-extrabold tracking-wide truncate">(★ω★) 🚀 Spark Generation!</span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white font-mono hidden md:inline-block">Ctrl+Enter</span>
                             </button>
                             <button id="btn-interrupt" type="button" onclick="handleInterrupt()"
-                                class="hidden bg-rose-600/90 hover:bg-rose-600 text-white font-bold py-3.5 px-5 rounded-2xl transition-all shadow-lg shadow-rose-600/30 flex items-center space-x-1.5 active:scale-95">
+                                class="hidden bg-rose-600/90 hover:bg-rose-600 text-white font-bold py-3 sm:py-3.5 px-4 sm:px-5 rounded-2xl transition-all shadow-lg shadow-rose-600/30 flex items-center space-x-1.5 active:scale-95 shrink-0">
                                 <span>🛑 Cancel</span>
                             </button>
                         </div>
@@ -402,15 +402,15 @@
 
                 <!-- Right Column: Generation Status & Live Preview Result -->
                 <div class="lg:col-span-6 xl:col-span-7 2xl:col-span-7 space-y-5 lg:sticky lg:top-20 lg:self-start">
-                    <div class="anime-card p-6 flex flex-col h-full min-h-[480px]">
+                    <div class="anime-card p-3.5 sm:p-6 flex flex-col h-full min-h-[340px] sm:min-h-[480px]">
                         
                         <!-- Header / Status Bar -->
                         <div class="flex items-center justify-between pb-3 border-b border-pink-500/20 text-xs">
-                            <div class="flex items-center space-x-2">
-                                <span class="w-2.5 h-2.5 rounded-full bg-pink-500 shadow-sm shadow-pink-500"></span>
-                                <span id="preview-status-heading" class="font-bold text-pink-200">Canvas Preview (プレビュー)</span>
+                            <div class="flex items-center space-x-2 min-w-0">
+                                <span class="w-2.5 h-2.5 rounded-full bg-pink-500 shadow-sm shadow-pink-500 shrink-0"></span>
+                                <span id="preview-status-heading" class="font-bold text-pink-200 truncate">Canvas Preview (プレビュー)</span>
                             </div>
-                            <span id="preview-timer" class="font-mono text-pink-300 font-semibold">Ready</span>
+                            <span id="preview-timer" class="font-mono text-pink-300 font-semibold shrink-0 ml-2">Ready</span>
                         </div>
 
                         <!-- Progress Bar Container -->
@@ -425,7 +425,7 @@
                         </div>
 
                         <!-- Canvas Image / Placeholder Area -->
-                        <div class="flex-1 mt-4 relative flex items-center justify-center bg-black/40 rounded-2xl border border-pink-500/20 overflow-hidden min-h-[380px] lg:min-h-[500px] xl:min-h-[580px] 2xl:min-h-[700px] max-h-[calc(100vh-14rem)]">
+                        <div class="flex-1 mt-4 relative flex items-center justify-center bg-black/40 rounded-2xl border border-pink-500/20 overflow-hidden min-h-[260px] sm:min-h-[380px] lg:min-h-[500px] xl:min-h-[580px] 2xl:min-h-[700px] max-h-[calc(100vh-14rem)]">
                             
                             <!-- Generation Summoning Animation Overlay -->
                             <div id="preview-generating-loader" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#070814]/85 backdrop-blur-md transition-all duration-300 select-none">
@@ -530,10 +530,10 @@
         <section id="view-gallery" class="hidden space-y-6">
             
             <!-- Controls Bar -->
-            <div class="anime-card p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="anime-card p-3.5 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
                 
                 <!-- Search & Filters -->
-                <div class="flex-1 flex flex-col sm:flex-row items-center gap-3">
+                <div class="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                     <div class="relative w-full sm:w-80">
                         <span class="absolute left-3.5 top-2.5 text-pink-400 text-sm">🔍</span>
                         <input type="text" id="gallery-search" placeholder="Search filenames..." oninput="debounceGallerySearch()"
@@ -542,7 +542,7 @@
                     
                     <div class="flex items-center space-x-2 w-full sm:w-auto">
                         <label class="text-xs font-bold text-pink-300 whitespace-nowrap">Sort:</label>
-                        <select id="gallery-sort" onchange="loadGallery(true)" class="bg-[#0a0b16]/90 border border-pink-500/30 rounded-xl px-3 py-2 text-xs text-pink-200 focus:outline-none focus:border-pink-500">
+                        <select id="gallery-sort" onchange="loadGallery(true)" class="flex-1 sm:flex-initial bg-[#0a0b16]/90 border border-pink-500/30 rounded-xl px-3 py-2 text-xs text-pink-200 focus:outline-none focus:border-pink-500">
                             <option value="newest">Newest First</option>
                             <option value="oldest">Oldest First</option>
                             <option value="name_asc">Filename (A-Z)</option>
@@ -552,28 +552,31 @@
                 </div>
 
                 <!-- Stats, TikTok Mode & Refresh -->
-                <div class="flex items-center justify-between md:justify-end space-x-3 text-xs text-zinc-400">
-                    <span id="gallery-stats-text" class="text-pink-300 font-semibold">Loading images...</span>
+                <div class="flex flex-wrap items-center justify-between lg:justify-end gap-2 text-xs text-zinc-400">
+                    <span id="gallery-stats-text" class="text-pink-300 font-semibold truncate max-w-[200px] sm:max-w-none">Loading images...</span>
 
-                    <!-- Reel Mode Button -->
-                    <button type="button" onclick="openTikTokMode()" title="Immersive Random Fullscreen Mode"
-                        class="px-4 py-2.5 bg-gradient-to-r from-pink-500 via-fuchsia-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-extrabold rounded-2xl transition-all shadow-lg shadow-pink-500/30 flex items-center gap-1.5 active:scale-95">
-                        <span class="text-sm">🌸</span>
-                        <span>Reel Mode ぴょん (Random)</span>
-                    </button>
+                    <div class="flex items-center space-x-2 shrink-0">
+                        <!-- Reel Mode Button -->
+                        <button type="button" onclick="openTikTokMode()" title="Immersive Random Fullscreen Mode"
+                            class="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-pink-500 via-fuchsia-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white font-extrabold rounded-2xl transition-all shadow-lg shadow-pink-500/30 flex items-center gap-1.5 active:scale-95 text-xs">
+                            <span class="text-sm">🌸</span>
+                            <span>Reel Mode</span>
+                            <span class="hidden sm:inline">ぴょん (Random)</span>
+                        </button>
 
-                    <button type="button" onclick="loadGallery(true)" title="Reload output directory"
-                        class="px-3.5 py-2.5 bg-white/5 hover:bg-white/10 text-pink-200 border border-pink-500/30 rounded-2xl transition-colors flex items-center gap-1.5 shadow-sm active:scale-95">
-                        <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        <span class="font-bold">Refresh</span>
-                    </button>
+                        <button type="button" onclick="loadGallery(true)" title="Reload output directory"
+                            class="px-3 sm:px-3.5 py-2 sm:py-2.5 bg-white/5 hover:bg-white/10 text-pink-200 border border-pink-500/30 rounded-2xl transition-colors flex items-center gap-1.5 shadow-sm active:scale-95 text-xs">
+                            <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span class="font-bold hidden xs:inline sm:inline">Refresh</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <!-- Gallery Grid Container -->
-            <div id="gallery-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 min-[2000px]:grid-cols-10 gap-3 sm:gap-4 lg:gap-5">
+            <div id="gallery-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 min-[2000px]:grid-cols-10 gap-2.5 sm:gap-4 lg:gap-5">
                 <!-- Dynamically populated thumbnail cards -->
             </div>
 
@@ -601,38 +604,38 @@
         <!-- VIEW 3: WORKFLOW JSON EDITOR & MANAGER     -->
         <!-- ========================================== -->
         <section id="view-workflow" class="hidden space-y-6">
-            <div class="anime-card p-6 space-y-4">
+            <div class="anime-card p-3.5 sm:p-6 space-y-4">
                 
                 <!-- Workflows Header -->
-                <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-pink-500/20 gap-4">
-                    <div>
-                        <h2 class="text-lg font-extrabold text-white flex items-center gap-2">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between pb-4 border-b border-pink-500/20 gap-3 sm:gap-4">
+                    <div class="min-w-0">
+                        <h2 class="text-base sm:text-lg font-extrabold text-white flex flex-wrap items-center gap-1.5 sm:gap-2">
                             <span>ComfyUI Workflows Manager</span>
-                            <span class="text-pink-400 font-normal text-xs">設計図</span>
+                            <span class="text-pink-400 font-normal text-xs hidden xs:inline">設計図</span>
                             <span id="active-workflow-pill" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-pink-500/20 border border-pink-500/40 text-pink-200">Active</span>
                         </h2>
-                        <p class="text-xs text-zinc-400">Load workflows from ComfyUI server, local templates, or import any ComfyUI JSON or PNG image.</p>
+                        <p class="text-xs text-zinc-400 mt-0.5">Load workflows from ComfyUI server, local templates, or import any ComfyUI JSON or PNG image.</p>
                     </div>
 
                     <!-- Workflow Picker & Actions -->
-                    <div class="flex flex-wrap items-center gap-2">
-                        <select id="editor-workflow-select" onchange="switchActiveWorkflow(this.value)" class="bg-[#0a0b16] border border-pink-500/30 rounded-xl px-3 py-1.5 text-xs text-pink-200 font-semibold focus:outline-none focus:border-pink-500">
+                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                        <select id="editor-workflow-select" onchange="switchActiveWorkflow(this.value)" class="w-full sm:w-auto min-w-0 max-w-full bg-[#0a0b16] border border-pink-500/30 rounded-xl px-3 py-1.5 text-xs text-pink-200 font-semibold focus:outline-none focus:border-pink-500 truncate">
                             <option value="default">Default SD 1.5 Workflow</option>
                         </select>
                         <button type="button" onclick="saveWorkflowToServerOrLocal('local')"
-                            class="px-3 py-1.5 anime-btn-secondary rounded-xl text-xs font-semibold">
+                            class="px-2.5 sm:px-3 py-1.5 anime-btn-secondary rounded-xl text-xs font-semibold">
                             💾 Save Local
                         </button>
                         <button type="button" onclick="saveWorkflowToServerOrLocal('server')"
-                            class="px-3 py-1.5 anime-btn-secondary rounded-xl text-xs font-semibold">
+                            class="px-2.5 sm:px-3 py-1.5 anime-btn-secondary rounded-xl text-xs font-semibold">
                             ☁️ Save to Server
                         </button>
                         <button type="button" onclick="resetWorkflowTemplate()"
-                            class="px-3 py-1.5 anime-btn-secondary rounded-xl text-xs font-semibold">
+                            class="px-2.5 sm:px-3 py-1.5 anime-btn-secondary rounded-xl text-xs font-semibold">
                             ↺ Reset Default
                         </button>
                         <button type="button" onclick="saveWorkflowTemplate()"
-                            class="px-4 py-1.5 anime-btn-primary rounded-xl text-xs font-bold">
+                            class="px-3.5 sm:px-4 py-1.5 anime-btn-primary rounded-xl text-xs font-bold">
                             ✨ Apply to Generator
                         </button>
                     </div>
@@ -644,17 +647,17 @@
                     ondragleave="handleWorkflowDragLeave(event)" 
                     ondrop="handleWorkflowDrop(event)" 
                     onclick="document.getElementById('workflow-file-input').click()" 
-                    class="workflow-dropzone p-5 text-center cursor-pointer space-y-1.5 group select-none">
+                    class="workflow-dropzone p-4 sm:p-5 text-center cursor-pointer space-y-1.5 group select-none max-w-full overflow-hidden break-words">
                     <input type="file" id="workflow-file-input" class="hidden" accept=".json,.png,.webp" onchange="handleWorkflowFileInput(this.files)">
-                    <div class="text-3xl group-hover:scale-125 transition-transform">🌸✨📂</div>
-                    <div class="text-sm font-extrabold text-pink-300">Drop ComfyUI Workflow (.json) or Generated Image (.png) here!</div>
-                    <div class="text-xs text-zinc-400">Click or drag & drop to instantly import, extract embedded prompt graph, and activate for generation.</div>
+                    <div class="text-2xl sm:text-3xl group-hover:scale-125 transition-transform">🌸✨📂</div>
+                    <div class="text-xs sm:text-sm font-extrabold text-pink-300 break-words">Drop ComfyUI Workflow (.json) or Generated Image (.png) here!</div>
+                    <div class="text-[11px] sm:text-xs text-zinc-400">Click or drag & drop to instantly import, extract embedded prompt graph, and activate for generation.</div>
                 </div>
 
                 <!-- Workflow JSON Editor -->
                 <div>
                     <textarea id="workflow-editor" rows="20" spellcheck="false"
-                        class="w-full bg-[#0a0b16]/95 border border-pink-500/25 rounded-2xl p-4 font-mono text-xs text-emerald-300 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/40 transition-all shadow-inner"></textarea>
+                        class="w-full max-w-full min-w-0 bg-[#0a0b16]/95 border border-pink-500/25 rounded-2xl p-3 sm:p-4 font-mono text-xs text-emerald-300 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/40 transition-all shadow-inner"></textarea>
                 </div>
             </div>
         </section>
@@ -671,23 +674,23 @@
     <!-- ========================================== -->
     <!-- IMAGE DETAIL & METADATA MODAL              -->
     <!-- ========================================== -->
-    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-xl">
-        <div class="glass-modal max-w-7xl 2xl:max-w-[92vw] w-full h-[92vh] max-h-[1200px] rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative">
+    <div id="image-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-xl">
+        <div class="glass-modal max-w-7xl 2xl:max-w-[92vw] w-full h-[94vh] sm:h-[92vh] max-h-[1200px] rounded-2xl sm:rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl relative">
             
             <!-- Close Modal Button -->
-            <button onclick="closeImageModal()" class="absolute top-4 right-4 z-30 w-9 h-9 rounded-full bg-black/70 hover:bg-pink-600 text-pink-200 hover:text-white flex items-center justify-center border border-pink-500/30 transition-all">
+            <button onclick="closeImageModal()" class="absolute top-3 right-3 sm:top-4 sm:right-4 z-30 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/70 hover:bg-pink-600 text-pink-200 hover:text-white flex items-center justify-center border border-pink-500/30 transition-all">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
 
             <!-- Left / Center: Full Size Image Viewer with Prev / Next Navigation -->
-            <div class="flex-1 bg-black/50 flex items-center justify-center p-4 overflow-hidden relative group select-none">
+            <div class="flex-1 bg-black/50 flex items-center justify-center p-2 sm:p-4 overflow-hidden relative group select-none min-h-[35vh] md:min-h-0">
                 
                 <!-- Previous Image Arrow Button -->
                 <button onclick="navigateModalImage(-1)" title="Previous image (Left Arrow)"
-                    class="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/80 hover:bg-pink-600 text-white flex items-center justify-center border border-pink-500/40 shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    class="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/80 hover:bg-pink-600 text-white flex items-center justify-center border border-pink-500/40 shadow-xl opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-all duration-150 hover:scale-110">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
                     </svg>
                 </button>
@@ -697,35 +700,35 @@
 
                 <!-- Next Image Arrow Button -->
                 <button onclick="navigateModalImage(1)" title="Next image (Right Arrow)"
-                    class="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/80 hover:bg-pink-600 text-white flex items-center justify-center border border-pink-500/40 shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-110">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/80 hover:bg-pink-600 text-white flex items-center justify-center border border-pink-500/40 shadow-xl opacity-80 md:opacity-0 md:group-hover:opacity-100 transition-all duration-150 hover:scale-110">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
                     </svg>
                 </button>
 
                 <!-- Dimensions Badge -->
-                <div class="absolute bottom-3 left-3 bg-black/80 backdrop-blur px-3 py-1 rounded-full text-[11px] font-mono text-pink-300 border border-pink-500/30">
+                <div class="absolute bottom-2.5 left-2.5 sm:bottom-3 sm:left-3 bg-black/80 backdrop-blur px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-mono text-pink-300 border border-pink-500/30">
                     <span id="modal-img-dim"></span>
                 </div>
 
                 <!-- Index Counter Badge -->
-                <div class="absolute top-4 left-4 bg-black/80 backdrop-blur px-3 py-1 rounded-full text-xs font-mono text-pink-200 border border-pink-500/30">
+                <div class="absolute top-3 left-3 sm:top-4 sm:left-4 bg-black/80 backdrop-blur px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-mono text-pink-200 border border-pink-500/30">
                     <span id="modal-nav-indicator">1 / 1</span>
                 </div>
 
             </div>
 
             <!-- Right Sidebar: Metadata & Actions -->
-            <div class="w-full md:w-96 lg:w-[420px] shrink-0 bg-[#0e0f1e]/95 border-t md:border-t-0 md:border-l border-pink-500/20 flex flex-col h-full overflow-hidden">
+            <div class="w-full md:w-96 lg:w-[420px] shrink-0 bg-[#0e0f1e]/95 border-t md:border-t-0 md:border-l border-pink-500/20 flex flex-col max-h-[55vh] md:max-h-full flex-1 md:flex-initial overflow-hidden">
                 
                 <!-- Header -->
-                <div class="p-4 border-b border-pink-500/20">
+                <div class="p-3 sm:p-4 border-b border-pink-500/20">
                     <h3 id="modal-filename" class="font-bold text-sm text-pink-100 truncate">image.png</h3>
                     <p id="modal-date" class="text-xs text-zinc-400 mt-0.5 font-mono"></p>
                 </div>
 
                 <!-- Scrollable Metadata Area -->
-                <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+                <div class="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 text-xs">
                     
                     <!-- Positive Prompt Section -->
                     <div class="space-y-1.5">
@@ -773,12 +776,12 @@
                 </div>
 
                 <!-- Footer Actions -->
-                <div class="p-4 border-t border-pink-500/20 bg-black/40 space-y-2">
+                <div class="p-3 sm:p-4 border-t border-pink-500/20 bg-black/40 space-y-2">
                     <div class="flex items-center space-x-2">
-                        <button type="button" onclick="loadModalPromptToGenerator()" class="flex-1 anime-btn-primary py-2.5 rounded-xl text-xs font-bold text-center">
+                        <button type="button" onclick="loadModalPromptToGenerator()" class="flex-1 anime-btn-primary py-2 sm:py-2.5 rounded-xl text-xs font-bold text-center">
                             ⚡ Use in Generator
                         </button>
-                        <a id="modal-download-link" href="" download class="px-3.5 py-2.5 anime-btn-secondary rounded-xl text-xs font-bold text-center inline-flex items-center justify-center" title="Download Full Resolution" onclick="downloadModalImage()">
+                        <a id="modal-download-link" href="" download class="px-3.5 py-2 sm:py-2.5 anime-btn-secondary rounded-xl text-xs font-bold text-center inline-flex items-center justify-center" title="Download Full Resolution" onclick="downloadModalImage()">
                             📥
                         </a>
                     </div>
@@ -799,24 +802,25 @@
     <div id="tiktok-modal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl hidden flex items-center justify-center select-none overflow-hidden">
         
         <!-- Top Header & Exit -->
-        <div class="absolute top-4 inset-x-4 sm:inset-x-8 z-30 flex items-center justify-between text-xs">
-            <div class="flex items-center space-x-2 bg-black/70 backdrop-blur px-4 py-2 rounded-full border border-pink-500/30">
+        <div class="absolute top-2.5 sm:top-4 inset-x-2 sm:inset-x-8 z-30 flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-1.5 sm:space-x-2 bg-black/70 backdrop-blur px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-pink-500/30">
                 <span class="text-pink-400">🌸</span>
-                <span class="font-extrabold text-white tracking-wide">Reel Mode (リールモード)</span>
-                <span id="tiktok-index-counter" class="text-pink-300 font-mono font-bold ml-2">1 / 1</span>
+                <span class="font-extrabold text-white tracking-wide text-xs">Reel Mode</span>
+                <span class="text-pink-400 font-normal hidden sm:inline">(リールモード)</span>
+                <span id="tiktok-index-counter" class="text-pink-300 font-mono font-bold ml-1 sm:ml-2">1 / 1</span>
             </div>
             
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-1.5 sm:space-x-2">
                 <!-- Auto-Play Toggle -->
                 <button type="button" id="btn-tiktok-autoplay" onclick="toggleTikTokAutoplay()"
-                    class="px-4 py-2 rounded-full bg-black/70 hover:bg-white/10 border border-pink-500/30 text-pink-200 font-bold flex items-center gap-1.5 transition-colors">
+                    class="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-black/70 hover:bg-white/10 border border-pink-500/30 text-pink-200 font-bold flex items-center gap-1 sm:gap-1.5 transition-colors">
                     <span id="tiktok-autoplay-icon">▶</span>
-                    <span id="tiktok-autoplay-text">Auto-Play</span>
+                    <span id="tiktok-autoplay-text" class="hidden xs:inline">Auto-Play</span>
                 </button>
                 
                 <!-- Close Button -->
                 <button type="button" onclick="closeTikTokMode()" title="Exit (Esc)"
-                    class="w-9 h-9 rounded-full bg-black/70 hover:bg-pink-600 text-pink-200 hover:text-white flex items-center justify-center border border-pink-500/30 transition-colors">
+                    class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/70 hover:bg-pink-600 text-pink-200 hover:text-white flex items-center justify-center border border-pink-500/30 transition-colors">
                     ✕
                 </button>
             </div>
@@ -828,11 +832,11 @@
         </div>
 
         <!-- Bottom Caption Glass Overlay -->
-        <div class="absolute bottom-6 left-4 sm:left-8 right-20 sm:right-28 z-30 max-w-2xl pointer-events-auto">
-            <div class="glass-reel-card glass-tiktok-card p-4 rounded-3xl space-y-2 border border-pink-500/30">
+        <div class="absolute bottom-3 sm:bottom-6 left-2 sm:left-8 right-16 sm:right-28 z-30 max-w-2xl pointer-events-auto">
+            <div class="glass-reel-card glass-tiktok-card p-3 sm:p-4 rounded-2xl sm:rounded-3xl space-y-1.5 sm:space-y-2 border border-pink-500/30 max-h-40 sm:max-h-48 overflow-y-auto">
                 <div class="flex items-center space-x-2 text-xs">
                     <span id="tiktok-filename" class="font-extrabold text-white truncate">Image</span>
-                    <span id="tiktok-meta-badge" class="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-mono text-[10px] border border-pink-500/30"></span>
+                    <span id="tiktok-meta-badge" class="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-mono text-[10px] border border-pink-500/30 shrink-0"></span>
                 </div>
                 <div id="tiktok-prompt-tags" class="flex flex-wrap gap-1 max-h-16 overflow-y-auto"></div>
                 <p id="tiktok-prompt-text" class="text-xs text-pink-100 line-clamp-3 leading-relaxed"></p>
@@ -840,40 +844,40 @@
         </div>
 
         <!-- Right Floating Action Sidebar (Reel Style) -->
-        <div class="absolute right-4 sm:right-6 bottom-8 z-30 flex flex-col items-center space-y-4">
+        <div class="absolute right-2 sm:right-6 bottom-4 sm:bottom-8 z-30 flex flex-col items-center space-y-2.5 sm:space-y-4">
             
             <!-- Next Random -->
             <button onclick="nextTikTokImage('up')" title="Next Random Image (ArrowDown / Space / Swipe Up)"
-                class="w-12 h-12 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white flex flex-col items-center justify-center shadow-xl shadow-pink-500/40 hover:scale-110 active:scale-95 transition-all">
-                <span class="text-base">🎲</span>
+                class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white flex flex-col items-center justify-center shadow-xl shadow-pink-500/40 hover:scale-110 active:scale-95 transition-all">
+                <span class="text-sm sm:text-base">🎲</span>
             </button>
 
             <!-- Previous -->
             <button onclick="prevTikTokImage('down')" title="Previous Image (ArrowUp / Swipe Down)"
-                class="w-11 h-11 rounded-full bg-black/80 hover:bg-white/10 border border-pink-500/30 text-pink-200 flex items-center justify-center shadow hover:scale-110 active:scale-95 transition-all">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                class="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/80 hover:bg-white/10 border border-pink-500/30 text-pink-200 flex items-center justify-center shadow hover:scale-110 active:scale-95 transition-all">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
                 </svg>
             </button>
 
             <!-- Copy Prompt -->
             <button onclick="copyTikTokPrompt()" title="Copy Prompt"
-                class="w-11 h-11 rounded-full bg-black/80 hover:bg-white/10 border border-pink-500/30 text-pink-200 flex items-center justify-center shadow hover:scale-110 active:scale-95 transition-all">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                class="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-black/80 hover:bg-white/10 border border-pink-500/30 text-pink-200 flex items-center justify-center shadow hover:scale-110 active:scale-95 transition-all">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
             </button>
 
             <!-- Use in Generator -->
             <button onclick="loadTikTokPromptIntoGenerator()" title="Use in Generator"
-                class="w-11 h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-pink-500/30 hover:scale-110 active:scale-95 transition-all">
-                <span class="text-sm">⚡</span>
+                class="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-r from-pink-500 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-pink-500/30 hover:scale-110 active:scale-95 transition-all">
+                <span class="text-xs sm:text-sm">⚡</span>
             </button>
 
             <!-- Delete Image -->
             <button onclick="openDeleteConfirmModal(state.currentTikTokImage)" title="Delete image"
-                class="w-11 h-11 rounded-full bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/40 text-rose-300 flex items-center justify-center shadow hover:scale-110 active:scale-95 transition-all">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                class="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500/40 text-rose-300 flex items-center justify-center shadow hover:scale-110 active:scale-95 transition-all">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
             </button>
@@ -930,6 +934,6 @@
     <div id="toast-container" class="fixed bottom-4 right-4 z-[3000] space-y-2 pointer-events-none"></div>
 
     <!-- Main JavaScript Logic -->
-    <script src="/static/app.js?v=1.3.4"></script>
+    <script src="/static/app.js?v=1.3.5"></script>
 </body>
 </html>

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### 🌸 Added
+- **Dedicated URI Routes & Refresh Persistence**:
+  - Direct URI paths for all main views and viewer modes: `/generator` (`/`), `/gallery`, `/workflows` (`/workflow`), and `/reel` (`/reels`, `/tiktok`).
+  - Seamless browser History API integration (`pushState` and `popstate`) supporting browser back/forward buttons and persisting views across full page refreshes.
+  - Backend route handlers in FastAPI serving `index.html` with dynamic version injection for all view endpoints.
+
+### 🐛 Fixed
+- **Smartphone Viewport UI Overflow**:
+  - Eliminated horizontal viewport overflow and page drift on small smartphone displays (e.g., iPhone and Android viewports from 320px to 430px).
+  - Refactored Danbooru tag helper bar from an unconstrained single-line flex row to a fluid wrapping layout.
+  - Adapted top navigation header with responsive title truncation, collapsible subtitle decals, and compact status indicator.
+  - Made prompt action rows (Clear, Reset Default), Seed controls, and Batch Queue controls wrap cleanly on narrow screens.
+  - Streamlined Gallery controls bar and Reel Mode buttons to prevent horizontal runover on smartphones.
+  - Enhanced detailed image modal and Reel Mode fullscreen layout to fit small vertical viewports with independent scroll containers.
+  - Applied strict `html, body { overflow-x: hidden; width: 100%; max-width: 100vw; }` and responsive container constraints.
+
+---
+
 ## [1.1.1] - 2026-10-20
 
 ### 🌸 UI & Layout

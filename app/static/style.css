@@ -18,6 +18,16 @@
     --anime-amber: #fbbf24;
 }
 
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 body {
     font-family: 'Outfit', 'M PLUS Rounded 1c', system-ui, -apple-system, sans-serif;
     background-color: var(--anime-bg-dark);
@@ -535,5 +545,28 @@ input[type="range"]::-webkit-slider-thumb:hover {
     content-visibility: auto;
     contain-intrinsic-size: auto none auto 220px;
 }
+
+/* Smartphone Viewport Adaptations (< 640px) */
+@media (max-width: 640px) {
+    .anime-card {
+        border-radius: 1.25rem;
+    }
+    .anime-card-subtle {
+        border-radius: 1rem;
+    }
+    .tag-pill-btn {
+        padding: 0.28rem 0.6rem;
+        font-size: 10.5px;
+    }
+    #image-modal .glass-modal {
+        height: 94vh;
+        max-height: 94vh;
+    }
+    .glass-reel-card {
+        padding: 0.75rem 1rem;
+        border-radius: 1.25rem;
+    }
+}
+
 
 
