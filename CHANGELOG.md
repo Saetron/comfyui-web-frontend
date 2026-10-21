@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Backend route handlers in FastAPI serving `index.html` with dynamic version injection for all view endpoints.
 
 ### 🐛 Fixed
+- **Reel Mode Scroll & Background Gallery Lock**:
+  - Fixed an issue where scrolling in Reel Mode scrolled the underlying background gallery rather than immediately transitioning between artworks.
+  - Implemented body scroll locking (`body.modal-open` with `overflow: hidden !important; overscroll-behavior: contain`) when Reel Mode or image modals are displayed.
+  - Bound the wheel listener across `#tiktok-modal` with non-passive event interception (`{ passive: false }`), calling `e.preventDefault()` to prevent scroll events from escaping to the background document.
+  - Added debounce throttling (`320ms`) to mouse wheel and trackpad flick gestures to ensure clean 1:1 image transitions without skipping.
+  - Prevented touch drag gestures on mobile from passing through to background gallery scrolling.
 - **Smartphone Viewport UI Overflow**:
   - Eliminated horizontal viewport overflow and page drift on small smartphone displays (e.g., iPhone and Android viewports from 320px to 430px).
   - Refactored Danbooru tag helper bar from an unconstrained single-line flex row to a fluid wrapping layout.

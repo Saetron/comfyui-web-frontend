@@ -161,13 +161,22 @@ body::before {
     box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.9), 0 0 45px rgba(255, 94, 152, 0.3);
 }
 
+/* Scroll locking when modals or reel mode are active */
+body.modal-open {
+    overflow: hidden !important;
+    overscroll-behavior: contain !important;
+}
+
 /* Stacking Layer Hierarchy for Modals and Popouts */
 #image-modal {
     z-index: 1000 !important;
+    overscroll-behavior: contain;
 }
 
 #tiktok-modal {
     z-index: 1000 !important;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
 #delete-confirm-modal {

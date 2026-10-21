@@ -1887,6 +1887,7 @@ async function openImageModalByIndex(index, fallbackPath = null) {
     const modal = document.getElementById('image-modal');
     if (!modal) return;
     modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
 
     let item = {};
     if (state.galleryImages && state.galleryImages.length > 0 && index >= 0) {
@@ -2045,6 +2046,10 @@ function navigateModalImage(direction) {
 function closeImageModal() {
     document.getElementById('image-modal').classList.add('hidden');
     state.currentModalImage = null;
+    const tiktokModal = document.getElementById('tiktok-modal');
+    if (!tiktokModal || tiktokModal.classList.contains('hidden')) {
+        document.body.classList.remove('modal-open');
+    }
 }
 
 function toggleModalRawJson() {
@@ -2154,6 +2159,7 @@ async function openTikTokMode(pushState = true) {
         state.tiktokIndex = 0;
         const modal = document.getElementById('tiktok-modal');
         if (modal) modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
         displayTikTokItem(0, 'none');
         showToast(`🎬 Reel Mode loaded ${allItems.length} images!`, 'success');
         return;
@@ -2170,6 +2176,7 @@ async function openTikTokMode(pushState = true) {
 
     const modal = document.getElementById('tiktok-modal');
     if (modal) modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
 
     displayTikTokItem(0, 'none');
 }
@@ -2252,42 +2259,92 @@ function prevTikTokImage(direction = 'down') {
 }
 const prevReelImage = prevTikTokImage;
 
+let lastTikTokWheelTime = 0;
+
 function handleTikTokWheel(e) {
-    if (Math.abs(e.deltaY) > 30) {
-        if (e.deltaY > 0) nextTikTokImage('up');
-        else prevTikTokImage('down');
+    const modal = document.getElementById('tiktok-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    // Check if the scroll event originated inside a scrollable child container (e.g. caption tags or long prompt)
+    const scrollableTarget = e.target.closest('#tiktok-prompt-tags, #tiktok-prompt-text, .glass-reel-card');
+    if (scrollableTarget && scrollableTarget.scrollHeight > scrollableTarget.clientHeight) {
+        // If scrolling inside the scrollable caption drawer, don't hijack unless boundary reached
+        e.stopPropagation();
+        return;
+    }
+
+    if (e.cancelable) {
+        e.preventDefault();
+    }
+    e.stopPropagation();
+
+    const now = Date.now();
+    // Debounce rapid continuous wheel ticks so one wheel gesture flips exactly one image
+    if (now - lastTikTokWheelTime < 320) {
+        return;
+    }
+
+    if (Math.abs(e.deltaY) > 20 || Math.abs(e.deltaX) > 20) {
+        lastTikTokWheelTime = now;
+        if (e.deltaY > 0 || e.deltaX > 0) {
+            nextTikTokImage('up');
+        } else {
+            prevTikTokImage('down');
+        }
     }
 }
 
 // Swiping support for Reel Mode (Mouse drag & Touch swipe)
 let reelTouchStartY = 0;
+let reelTouchStartX = 0;
 let reelIsMouseDown = false;
 let reelMouseStartY = 0;
 
 function initReelSwipe() {
-    const reelArea = document.getElementById('reel-swipe-container') || document.getElementById('tiktok-modal');
-    if (!reelArea) return;
+    const modal = document.getElementById('tiktok-modal');
+    if (!modal) return;
+
+    // Intercept wheel events on the entire modal with passive: false to prevent background scrolling
+    modal.addEventListener('wheel', handleTikTokWheel, { passive: false });
 
     // Mobile/tablet touch swipe
-    reelArea.addEventListener('touchstart', (e) => {
+    modal.addEventListener('touchstart', (e) => {
         if (e.touches && e.touches.length === 1) {
             reelTouchStartY = e.touches[0].clientY;
+            reelTouchStartX = e.touches[0].clientX;
         }
     }, { passive: true });
 
-    reelArea.addEventListener('touchend', (e) => {
+    modal.addEventListener('touchmove', (e) => {
+        // Prevent background gallery from scrolling while swiping
+        const scrollableTarget = e.target.closest('#tiktok-prompt-tags, #tiktok-prompt-text, .glass-reel-card');
+        if (scrollableTarget && scrollableTarget.scrollHeight > scrollableTarget.clientHeight) {
+            return;
+        }
+        if (e.cancelable) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    modal.addEventListener('touchend', (e) => {
         if (e.changedTouches && e.changedTouches.length === 1) {
             const deltaY = reelTouchStartY - e.changedTouches[0].clientY;
-            if (deltaY > 35) {
-                nextTikTokImage('up');
-            } else if (deltaY < -35) {
-                prevTikTokImage('down');
+            const deltaX = reelTouchStartX - e.changedTouches[0].clientX;
+            // Ensure vertical swipe is dominant
+            if (Math.abs(deltaY) > 35 && Math.abs(deltaY) > Math.abs(deltaX)) {
+                if (deltaY > 0) {
+                    nextTikTokImage('up');
+                } else if (deltaY < 0) {
+                    prevTikTokImage('down');
+                }
             }
         }
     }, { passive: true });
 
     // Desktop mouse drag swipe
-    reelArea.addEventListener('mousedown', (e) => {
+    modal.addEventListener('mousedown', (e) => {
+        // Don't drag-swipe when clicking buttons or interactive elements
+        if (e.target.closest('button, a, input, select, textarea')) return;
         if (e.button === 0) {
             reelIsMouseDown = true;
             reelMouseStartY = e.clientY;
@@ -2333,6 +2390,7 @@ function closeTikTokMode(pushState = true) {
     const modal = document.getElementById('tiktok-modal');
     if (modal) modal.classList.add('hidden');
     state.currentTikTokImage = null;
+    document.body.classList.remove('modal-open');
 
     if (pushState && window.history && window.history.pushState) {
         const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
