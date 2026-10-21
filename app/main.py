@@ -153,6 +153,13 @@ if STATIC_DIR.exists():
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/generator", response_class=HTMLResponse)
+@app.get("/gallery", response_class=HTMLResponse)
+@app.get("/workflow", response_class=HTMLResponse)
+@app.get("/workflows", response_class=HTMLResponse)
+@app.get("/reel", response_class=HTMLResponse)
+@app.get("/reels", response_class=HTMLResponse)
+@app.get("/tiktok", response_class=HTMLResponse)
 async def get_index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():

@@ -285,3 +285,25 @@ def test_version_and_config():
     assert "v1.1.1 🌸" in resp.text
     assert "{{VERSION}}" not in resp.text
     assert "v1.2" not in resp.text
+
+
+def test_tab_and_reel_routes():
+    """Verify dedicated URI paths for tabs and reel mode serve index.html with 200 OK."""
+    client = TestClient(app)
+    routes = [
+        "/",
+        "/generator",
+        "/gallery",
+        "/workflow",
+        "/workflows",
+        "/reel",
+        "/reels",
+        "/tiktok",
+    ]
+    for route in routes:
+        resp = client.get(route)
+        assert resp.status_code == 200, f"Route {route} returned status {resp.status_code}"
+        assert "text/html" in resp.headers["content-type"]
+        assert "ComfyUI Studio" in resp.text
+        assert "v1.1.1 🌸" in resp.text
+

@@ -176,8 +176,20 @@ function closeMobileMenu() {
     if (closeIcon) closeIcon.classList.add('hidden');
 }
 
-// Navigation & Tab Switching
-function switchTab(tabId) {
+// Navigation & Tab Switching with URI Route Persistence
+function getPathForTab(tabId) {
+    if (tabId === 'gallery') return '/gallery';
+    if (tabId === 'workflow') return '/workflows';
+    return window.location.pathname === '/generator' ? '/generator' : '/';
+}
+
+function getTitleForTab(tabId) {
+    if (tabId === 'gallery') return '🌸 Gallery | ComfyUI Studio';
+    if (tabId === 'workflow') return '📜 Workflows | ComfyUI Studio';
+    return 'ComfyUI Studio ✨ スタジオ';
+}
+
+function switchTab(tabId, pushState = true) {
     state.activeTab = tabId;
     ['generator', 'gallery', 'workflow'].forEach(tab => {
         const view = document.getElementById(`view-${tab}`);
@@ -195,10 +207,40 @@ function switchTab(tabId) {
         }
     });
 
+    if (pushState && window.history && window.history.pushState) {
+        const targetPath = getPathForTab(tabId);
+        if (window.location.pathname !== targetPath) {
+            window.history.pushState({ tab: tabId }, '', targetPath);
+        }
+        document.title = getTitleForTab(tabId);
+    }
+
     if (tabId === 'gallery') {
         loadGallery(false);
     } else if (tabId === 'workflow') {
         loadWorkflowTemplate();
+    }
+}
+
+function applyRouteFromLocation(pushState = false) {
+    const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+    if (rawPath === '/reel' || rawPath === '/reels' || rawPath === '/tiktok') {
+        const modal = document.getElementById('tiktok-modal');
+        if (modal && modal.classList.contains('hidden')) {
+            openTikTokMode(pushState);
+        }
+    } else {
+        const modal = document.getElementById('tiktok-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            closeTikTokMode(false);
+        }
+        if (rawPath === '/gallery') {
+            switchTab('gallery', pushState);
+        } else if (rawPath === '/workflow' || rawPath === '/workflows') {
+            switchTab('workflow', pushState);
+        } else {
+            switchTab('generator', pushState);
+        }
     }
 }
 
@@ -2073,7 +2115,14 @@ function loadModalPromptIntoGenerator() {
 // ==========================================
 // REEL MODE FULLSCREEN RANDOM VIEWER & SWIPING
 // ==========================================
-async function openTikTokMode() {
+async function openTikTokMode(pushState = true) {
+    if (pushState && window.history && window.history.pushState) {
+        if (window.location.pathname !== '/reel') {
+            window.history.pushState({ mode: 'reel', prevTab: state.activeTab }, '', '/reel');
+        }
+        document.title = '🌸 Reel Mode | ComfyUI Studio';
+    }
+
     showToast('(ﾉ◕ヮ◕)ﾉ*:･ﾟ Loading Reel Mode... 🌸', 'info');
 
     let allItems = [];
@@ -2279,11 +2328,21 @@ function toggleTikTokAutoplay() {
 }
 const toggleReelAutoplay = toggleTikTokAutoplay;
 
-function closeTikTokMode() {
+function closeTikTokMode(pushState = true) {
     if (state.tiktokAutoplayActive) toggleTikTokAutoplay();
     const modal = document.getElementById('tiktok-modal');
     if (modal) modal.classList.add('hidden');
     state.currentTikTokImage = null;
+
+    if (pushState && window.history && window.history.pushState) {
+        const rawPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/';
+        if (rawPath === '/reel' || rawPath === '/reels' || rawPath === '/tiktok') {
+            const targetTab = state.activeTab || 'gallery';
+            const targetPath = getPathForTab(targetTab);
+            window.history.pushState({ tab: targetTab }, '', targetPath);
+            document.title = getTitleForTab(targetTab);
+        }
+    }
 }
 const closeReelMode = closeTikTokMode;
 
@@ -2496,6 +2555,11 @@ window.addEventListener('drop', (e) => {
     }
 });
 
+// Browser back/forward navigation support
+window.addEventListener('popstate', () => {
+    applyRouteFromLocation(false);
+});
+
 // Initialization
 window.addEventListener('DOMContentLoaded', () => {
     // Reset any legacy scale / zoom settings
@@ -2515,6 +2579,9 @@ window.addEventListener('DOMContentLoaded', () => {
     highlightActiveResPreset();
     updateAutoNewlinesUI();
     updateHeaderResponsiveness();
+
+    // Initialize active tab or reel mode based on URI path
+    applyRouteFromLocation(false);
 
     window.addEventListener('resize', updateHeaderResponsiveness);
     const headerRow = document.getElementById('header-inner-row');
